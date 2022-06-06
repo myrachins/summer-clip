@@ -23,7 +23,7 @@ def get_dataset(dataset_name, preprocess):
 
 
 def load_promts(dataset_name):
-    promts_mapping = {'CIFAR100': 'cifar100'}
+    promts_mapping = {'CIFAR100': 'cifar100', 'CIFAR10': 'cifar10'}
     if dataset_name not in promts_mapping:
         raise ValueError("Unsupported dataset for promts: {dataset_name}")
 
