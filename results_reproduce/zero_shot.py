@@ -13,15 +13,15 @@ def get_dataset(dataset_name, preprocess):
     if dataset_name == 'CIFAR100':
         from torchvision.datasets import CIFAR100
         return CIFAR100(root=root, train=False, transform=preprocess)
-    elif dataset_name == 'ImageNet':
-        from torchvision.datasets import ImageNet
-        return ImageNet(root=root, split='val', transform=preprocess)
     elif dataset_name == 'CIFAR10':
         from torchvision.datasets import CIFAR10
         return CIFAR10(root=root, train=False, transform=preprocess)
     elif dataset_name == 'ImageNetV2':
         from imagenetv2_pytorch import ImageNetV2Dataset
         return ImageNetV2Dataset(location=root, transform=preprocess)
+    elif dataset_name == 'ImageNet':
+        from torchvision.datasets import ImageNet
+        return ImageNet(f'{root}/ImageNet', split='val', transform=preprocess)
         
     raise ValueError(f"Unsupported dataset: {dataset_name}")
 
