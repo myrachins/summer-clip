@@ -22,13 +22,17 @@ def get_dataset(dataset_name, preprocess):
     elif dataset_name == 'ImageNet':
         from torchvision.datasets import ImageNet
         return ImageNet(f'{root}/ImageNet', split='val', transform=preprocess)
+    elif dataset_name == 'MNIST':
+        from torchvision.datasets import MNIST
+        return MNIST(root=root, train=False, transform=preprocess)
         
     raise ValueError(f"Unsupported dataset: {dataset_name}")
 
 
 def load_promts(dataset_name):
     promts_mapping = {
-        'CIFAR100': 'cifar100', 'CIFAR10': 'cifar10', 'ImageNet': 'imagenet', 'ImageNetV2': 'imagenet'
+        'CIFAR100': 'cifar100', 'CIFAR10': 'cifar10', 'ImageNet': 'imagenet', 'ImageNetV2': 'imagenet',
+        'MNIST': 'mnist'
     }
     if dataset_name not in promts_mapping:
         raise ValueError("Unsupported dataset for promts: {dataset_name}")
@@ -86,6 +90,7 @@ def print_accuracy(model, zeroshot_weights, loader):
 
 
 def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batch_size: int = 32, num_workers: int = 2, device: str ='cuda'):
+    print(f'{model_name=}, {dataset_name=}, {batch_size=}, {num_workers=}, {device=}')
     model, preprocess = clip.load(model_name, device)
     dataset = get_dataset(dataset_name, preprocess)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
