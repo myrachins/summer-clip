@@ -63,7 +63,7 @@ def accuracy(output, target, topk=(1,)):
     return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) for k in topk]
 
 
-def print_accuracy(model, zeroshot_weights, loader):
+def compute_accuracy(model, zeroshot_weights, loader):
     with torch.no_grad():
         top1, top5, n = 0., 0., 0.
         for i, (images, target) in enumerate(tqdm(loader)):
@@ -81,22 +81,23 @@ def print_accuracy(model, zeroshot_weights, loader):
             top5 += acc5
             n += images.size(0)
 
-
     top1 = (top1 / n) * 100
     top5 = (top5 / n) * 100
 
-    print(f"Top-1 accuracy: {top1:.2f}")
-    print(f"Top-5 accuracy: {top5:.2f}")
+    return top1, top5
 
 
-def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batch_size: int = 32, num_workers: int = 2, device: str ='cuda'):
+def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batch_size: int = 32, num_workers: int = 2, device: str = 'cuda'):
     print(f'{model_name=}, {dataset_name=}, {batch_size=}, {num_workers=}, {device=}')
     model, preprocess = clip.load(model_name, device)
     dataset = get_dataset(dataset_name, preprocess)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
     classes, templates = load_promts(dataset_name)
     zeroshot_weights = zeroshot_classifier(model, classes, templates)
-    print_accuracy(model, zeroshot_weights, loader)
+    
+    top1, top5 = compute_accuracy(model, zeroshot_weights, loader)
+    print(f"Top-1 accuracy: {top1:.2f}")
+    print(f"Top-5 accuracy: {top5:.2f}")
 
 
 if __name__ == '__main__':
