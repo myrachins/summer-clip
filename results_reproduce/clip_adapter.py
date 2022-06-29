@@ -1,5 +1,6 @@
 import itertools
 from pathlib import Path
+from copy import copy
 
 import torch
 import clip
@@ -12,20 +13,21 @@ from results_reproduce import zero_shot
 
 
 class ClipAdapter(nn.Module):
-    def __init__(self, clip_model, classnames, templates, output_dim=None):
+    def __init__(self, clip_model, dataset_name, visual_encoder_name, output_dim=None):
         super().__init__()
 
         self.clip_model = clip_model
-        self.classnames = classnames
-        self.templates = templates
-        zeroshot_weights = zero_shot.zeroshot_classifier(clip_model, classnames, templates)
+        self.dataset_name = dataset_name
+        self.visual_encoder_name = visual_encoder_name
+        self.classnames, self.templates = zero_shot.load_promts(dataset_name)
+        
+        zeroshot_weights = zero_shot.zeroshot_classifier(clip_model, self.classnames, self.templates)
         self.zeroshot_weights = nn.parameter.Parameter(zeroshot_weights, requires_grad=False) 
 
-        embed_dim = self.clip_model.text_projection.size(dim=1)
-        output_dim = output_dim or embed_dim
-        print(f'Adapter: {embed_dim=}, {output_dim=}')
-        self.vision_adapter = nn.Linear(embed_dim, output_dim)
-        self.text_adapter = nn.Linear(embed_dim, output_dim)
+        embed_dim = clip_model.text_projection.size(dim=1)
+        self.output_dim = output_dim or embed_dim
+        self.vision_adapter = nn.Linear(embed_dim, self.output_dim)
+        self.text_adapter = nn.Linear(embed_dim, self.output_dim)
 
     def encode_image(self, image):
         image = self.clip_model.encode_image(image)
@@ -100,14 +102,21 @@ def eval_model(loader, model: ClipAdapter):
 
 
 def save_epoch_model(model, optimizer, tb_loss_step, epoch_num, checkpoints_dir: Path):
-    epoch_dir = checkpoints_dir / f'model_epoch_{epoch_num}'
+    epoch_dir = checkpoints_dir / f'epoch_{epoch_num}'
     epoch_dir.mkdir(parents=True, exist_ok=True)
 
     def save_data(data, data_name):
         with open(epoch_dir / f'{data_name}.ckpt', 'wb') as f:
             torch.save(data, f)
 
-    save_data(model.state_dict(), 'model')
+    model_state_dict = copy(model.state_dict())
+    clip_model_keys = [param_name for param_name in model_state_dict.keys() if param_name.startswith('clip_model')]
+    for clip_model_key in clip_model_keys:
+        model_state_dict.pop(clip_model_key)
+
+    model_meta = {'visual_encoder_name': model.visual_encoder_name, 'dataset_name': model.dataset_name, 'output_dim': model.output_dim}
+    save_data(model_state_dict, 'model')
+    save_data(model_meta, 'model_meta')
     save_data(optimizer.state_dict(), 'optimizer')
     save_data(tb_loss_step, 'tb_loss_step')
 
@@ -133,16 +142,15 @@ def train_model(loader, model, loss, optimizer, device, epochs_num, checkpoints_
 
 def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', learning_rate: float = 1e-5, batch_size: int = 32,
         num_workers: int = 2, epochs_num: int = 10, checkpoints_dir: str = 'checkpoints', device: str = 'cuda'):
-    print(f'{model_name=}, {dataset_name=}, {learning_rate=}, {batch_size=}, {num_workers=}, {device=}')
+    print(f'{model_name=}, {dataset_name=}, {learning_rate=}, {batch_size=}, {num_workers=}, {epochs_num=}, {checkpoints_dir=}, {device=}')
     device = torch.device(device)
     checkpoints_dir = Path(checkpoints_dir)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
-    classnames, templates = zero_shot.load_promts(dataset_name)
 
-    adapter_model = ClipAdapter(clip_model, classnames, templates)
+    adapter_model = ClipAdapter(clip_model, dataset_name, model_name)
     loss = nn.CrossEntropyLoss()
     parameters = (adapter_model.vision_adapter.parameters(), adapter_model.text_adapter.parameters())
     optimizer = torch.optim.Adam(itertools.chain(*parameters), lr=learning_rate, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2)

@@ -13,9 +13,15 @@ def get_dataset(dataset_name, preprocess):
     if dataset_name == 'CIFAR100':
         from torchvision.datasets import CIFAR100
         return CIFAR100(root=root, train=False, transform=preprocess)
+    elif dataset_name == 'CIFAR100-train':
+        from torchvision.datasets import CIFAR100
+        return CIFAR100(root=root, train=True, transform=preprocess)
     elif dataset_name == 'CIFAR10':
         from torchvision.datasets import CIFAR10
         return CIFAR10(root=root, train=False, transform=preprocess)
+    elif dataset_name == 'CIFAR10-train':
+        from torchvision.datasets import CIFAR10
+        return CIFAR10(root=root, train=True, transform=preprocess)
     elif dataset_name == 'ImageNetV2':
         from imagenetv2_pytorch import ImageNetV2Dataset
         return ImageNetV2Dataset(location=root, transform=preprocess)
@@ -32,7 +38,7 @@ def get_dataset(dataset_name, preprocess):
 def load_promts(dataset_name):
     promts_mapping = {
         'CIFAR100': 'cifar100', 'CIFAR10': 'cifar10', 'ImageNet': 'imagenet', 'ImageNetV2': 'imagenet',
-        'MNIST': 'mnist'
+        'MNIST': 'mnist', 'CIFAR100-train': 'cifar100', 'CIFAR10-train': 'cifar10'
     }
     if dataset_name not in promts_mapping:
         raise ValueError("Unsupported dataset for promts: {dataset_name}")
