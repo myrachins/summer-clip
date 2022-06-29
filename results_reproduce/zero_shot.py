@@ -1,10 +1,12 @@
 import os
 import importlib
+import random
 
 import fire
 import clip
 import torch
 import torch.utils
+import numpy as np
 from tqdm import tqdm
 
 
@@ -93,8 +95,22 @@ def compute_accuracy(model, zeroshot_weights, loader):
     return top1, top5
 
 
-def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batch_size: int = 32, num_workers: int = 2, device: str = 'cuda'):
+def set_random_state(random_state: int):
+    os.environ['PYTHONHASHSEED'] = str(random_state)
+    random.seed(random_state)
+    np.random.seed(random_state)
+    
+    torch.manual_seed(random_state)
+    torch.cuda.manual_seed(random_state)
+    torch.cuda.manual_seed_all(random_state)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batch_size: int = 32, num_workers: int = 2,
+        device: str = 'cuda', random_state: int = 42):
     print(f'{model_name=}, {dataset_name=}, {batch_size=}, {num_workers=}, {device=}')
+    set_random_state(random_state)
     model, preprocess = clip.load(model_name, device)
     dataset = get_dataset(dataset_name, preprocess)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)

@@ -25,7 +25,9 @@ def load_adapter_model(checkpoint_dir: str, device):
     return model, preprocess
 
 
-def run(checkpoint_dir: str, dataset_name: str, batch_size: int = 32, num_workers: int = 2, device: str = 'cuda'):
+def run(checkpoint_dir: str, dataset_name: str, batch_size: int = 32, num_workers: int = 2, device: str = 'cuda', random_state: int = 42):
+    print(f'{dataset_name=}, {batch_size=}, {num_workers=}, {checkpoint_dir=}, {device=}')
+    zero_shot.set_random_state(random_state)
     adapter_model, preprocess = load_adapter_model(checkpoint_dir, device)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)

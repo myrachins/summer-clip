@@ -141,8 +141,9 @@ def train_model(loader, model, loss, optimizer, device, epochs_num, checkpoints_
 
 
 def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', learning_rate: float = 1e-5, batch_size: int = 32,
-        num_workers: int = 2, epochs_num: int = 10, checkpoints_dir: str = 'checkpoints', device: str = 'cuda'):
+        num_workers: int = 2, epochs_num: int = 10, checkpoints_dir: str = 'checkpoints', device: str = 'cuda', random_state: int = 42):
     print(f'{model_name=}, {dataset_name=}, {learning_rate=}, {batch_size=}, {num_workers=}, {epochs_num=}, {checkpoints_dir=}, {device=}')
+    zero_shot.set_random_state(random_state)
     device = torch.device(device)
     checkpoints_dir = Path(checkpoints_dir)
 
