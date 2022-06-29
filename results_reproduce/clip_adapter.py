@@ -121,7 +121,7 @@ def save_epoch_model(model, optimizer, tb_loss_step, epoch_num, checkpoints_dir:
     save_data(tb_loss_step, 'tb_loss_step')
 
 
-def train_model(loader, model, loss, optimizer, device, epochs_num, checkpoints_dir: Path):
+def train_model(train_loader, val_loader, model, loss, optimizer, device, epochs_num, checkpoints_dir: Path):
     log_dir = checkpoints_dir / 'tb_runs'
     log_dir.mkdir(parents=True, exist_ok=True)
     summary_writer = SummaryWriter(log_dir)
@@ -129,34 +129,52 @@ def train_model(loader, model, loss, optimizer, device, epochs_num, checkpoints_
 
     for epoch_num in range(1, epochs_num + 1):
         print(f'Running epoch {epoch_num}...')
-        model, epoch_loss, optimizer, tb_loss_step = train_epoch(loader, model, loss, optimizer, device, summary_writer, tb_loss_step)
-        eval_top1, eval_top5 = eval_model(loader, model)
-        summary_writer.add_scalar('epoch-sum-loss', epoch_loss, epoch_num)
-        summary_writer.add_scalar('epoch-acc@1', eval_top1, epoch_num)
-        summary_writer.add_scalar('epoch-acc@5', eval_top5, epoch_num)
-        print('acc@1:', eval_top1)
-        print('acc@5:', eval_top5)
+        model, epoch_loss, optimizer, tb_loss_step = train_epoch(train_loader, model, loss, optimizer, device, summary_writer, tb_loss_step)
+        print(f'Evaluating model on train...')
+        eval_top1, eval_top5 = eval_model(train_loader, model)
+        summary_writer.add_scalar('train-epoch-sum-loss', epoch_loss, epoch_num)
+        summary_writer.add_scalar('train-epoch-acc@1', eval_top1, epoch_num)
+        summary_writer.add_scalar('train-epoch-acc@5', eval_top5, epoch_num)
+        print('train-acc@1:', eval_top1)
+        print('train-acc@5:', eval_top5)
+        print(f'Evaluating model on validation...')
+        eval_top1, eval_top5 = eval_model(val_loader, model)
+        summary_writer.add_scalar('val-epoch-sum-loss', epoch_loss, epoch_num)
+        summary_writer.add_scalar('val-epoch-acc@1', eval_top1, epoch_num)
+        summary_writer.add_scalar('val-epoch-acc@5', eval_top5, epoch_num)
+        print('val-acc@1:', eval_top1)
+        print('val-acc@5:', eval_top5)
         print(f'Saving checkpoint after {epoch_num} epoch...')
         save_epoch_model(model, optimizer, tb_loss_step, epoch_num, checkpoints_dir)
 
 
-def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', learning_rate: float = 1e-5, batch_size: int = 32,
-        num_workers: int = 2, epochs_num: int = 10, checkpoints_dir: str = 'checkpoints', device: str = 'cuda', random_state: int = 42):
-    print(f'{model_name=}, {dataset_name=}, {learning_rate=}, {batch_size=}, {num_workers=}, {epochs_num=}, {checkpoints_dir=}, {device=}')
+def train_val_split(dataset, validation_size):
+    val_size = int(len(dataset) * validation_size)
+    train_size = len(dataset) - val_size
+    return torch.utils.data.random_split(dataset, [train_size, val_size])
+
+
+def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', validation_size: float = 0.25, learning_rate: float = 1e-5,
+        batch_size: int = 32, num_workers: int = 2, epochs_num: int = 10, checkpoints_dir: str = 'checkpoints', device: str = 'cuda',
+        random_state: int = 42):
+    print(f'{model_name=}, {dataset_name=}, {validation_size=}, {learning_rate=}, {batch_size=}, {num_workers=}, {epochs_num=}, {checkpoints_dir=}, {device=}')
     zero_shot.set_random_state(random_state)
     device = torch.device(device)
     checkpoints_dir = Path(checkpoints_dir)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+    train_dataset, val_dataset = train_val_split(dataset, validation_size)
+    print(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
 
     adapter_model = ClipAdapter(clip_model, dataset_name, model_name)
     loss = nn.CrossEntropyLoss()
     parameters = (adapter_model.vision_adapter.parameters(), adapter_model.text_adapter.parameters())
     optimizer = torch.optim.Adam(itertools.chain(*parameters), lr=learning_rate, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2)
     
-    train_model(loader, adapter_model, loss, optimizer, device, epochs_num, checkpoints_dir)
+    train_model(train_loader, val_loader, adapter_model, loss, optimizer, device, epochs_num, checkpoints_dir)
     
 
 if __name__ == '__main__':
