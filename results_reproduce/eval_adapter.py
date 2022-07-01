@@ -5,7 +5,7 @@ import fire
 import torch
 
 from results_reproduce import zero_shot
-from results_reproduce import clip_adapter
+from results_reproduce import train_adapter
 
 
 def load_adapter_model(checkpoint_dir: str, device):
@@ -14,13 +14,13 @@ def load_adapter_model(checkpoint_dir: str, device):
     model_meta = torch.load(checkpoint_dir / 'model_meta.ckpt')
     clip_model, preprocess = clip.load(model_meta['visual_encoder_name'], device)
 
-    model = clip_adapter.ClipAdapter(clip_model, model_meta['dataset_name'], model_meta['visual_encoder_name'], model_meta['output_dim'])
+    model = train_adapter.ClipAdapter(clip_model, model_meta['dataset_name'], model_meta['visual_encoder_name'], model_meta['output_dim'])
     del model.clip_model
     model_checkpoint = torch.load(checkpoint_dir / 'model.ckpt')
     model = model.to(device)
     model.load_state_dict(model_checkpoint)
     model.clip_model = clip_model
-    clip_adapter.convert_models_to_fp32(model)
+    train_adapter.convert_models_to_fp32(model)
     
     return model, preprocess
 
