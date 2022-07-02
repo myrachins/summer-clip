@@ -1,0 +1,14 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - _self_
+  - prompting: mnist
+
+eval:
+  checkpoint_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-02/16-48-08/checkpoints/epoch_1/model.ckpt
+  train_config_path: # if none, it is deducted from checkpoint_path
+
+data:
+  dataset_name: MNIST
+  num_workers: 2
+  batch_size: 32

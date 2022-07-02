@@ -1,0 +1,7 @@
+prompting: # default prompting strategy
+  templates: ['a photo of a {}.']
+  classes: # if none, it is loaded as dataset.classes
+
+meta:
+  device: cuda
+  random_state: 42
