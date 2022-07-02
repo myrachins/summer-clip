@@ -58,6 +58,7 @@ Thumbs.db
 *.wmv
 
 data/
+scripts/outs/
 outputs/*/*/checkpoints/*
 !outputs/*/*/checkpoints/tb_runs
 !outputs/*/*/*.log
