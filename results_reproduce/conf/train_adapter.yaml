@@ -1,0 +1,26 @@
+defaults:
+  - _self_
+  - adapter: linear
+  # - prompting: cifar_10
+
+prompting:
+  templates: ['a photo of a {}.']
+  classes:
+
+clip:
+  model_name: ViT-B/16
+
+data:
+  dataset_name: MNIST
+  validation_size: 0.25
+  checkpoints_dir: checkpoints
+  num_workers: 2
+
+training:
+  learning_rate: 0.00001
+  batch_size: 32
+  epochs_num: 20
+
+meta:
+  device: cuda
+  random_state: 42

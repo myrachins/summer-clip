@@ -20,7 +20,7 @@ def load_adapter_model(checkpoint_dir: str, device):
     model = model.to(device)
     model.load_state_dict(model_checkpoint)
     model.clip_model = clip_model
-    train_adapter.convert_models_to_fp32(model)
+    train_adapter.convert_model_to_fp32(model)
     
     return model, preprocess
 

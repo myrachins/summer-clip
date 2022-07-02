@@ -29,6 +29,9 @@ dist/
 # VS Code
 .vscode/
 
+# mypy
+.mypy_cache
+
 # Slurm outputs
 slurm-*.out
 
@@ -55,3 +58,5 @@ Thumbs.db
 *.wmv
 
 data/
+outputs/*/*/checkpoints/*
+!outputs/*/*/checkpoints/tb_runs
