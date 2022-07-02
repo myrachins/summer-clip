@@ -1,4 +1,5 @@
 import itertools
+import logging
 import typing as tp
 from pathlib import Path
 from copy import copy
@@ -163,15 +164,14 @@ def train_model(train_loader: DataLoader, val_loader: DataLoader, model: ClipAda
         summary_writer.add_scalar('train-epoch-sum-loss', epoch_loss, epoch_num)
         summary_writer.add_scalar('train-epoch-acc@1', eval_top1, epoch_num)
         summary_writer.add_scalar('train-epoch-acc@5', eval_top5, epoch_num)
-        print('train-acc@1:', eval_top1)
-        print('train-acc@5:', eval_top5)
+        logging.info(f'{epoch_num=}, train-acc@1: {eval_top1}')
+        logging.info(f'{epoch_num=}, train-acc@5: {eval_top5}')
         print('Evaluating model on validation...')
         eval_top1, eval_top5 = eval_model(val_loader, model)
-        summary_writer.add_scalar('val-epoch-sum-loss', epoch_loss, epoch_num)
         summary_writer.add_scalar('val-epoch-acc@1', eval_top1, epoch_num)
         summary_writer.add_scalar('val-epoch-acc@5', eval_top5, epoch_num)
-        print('val-acc@1:', eval_top1)
-        print('val-acc@5:', eval_top5)
+        logging.info(f'{epoch_num=}, val-acc@1: {eval_top1}')
+        logging.info(f'{epoch_num=}, val-acc@5: {eval_top5}')
         print(f'Saving checkpoint after {epoch_num} epoch...')
         save_epoch_model(model.clip_adapter, optimizer, tb_loss_step, epoch_num, checkpoints_dir)
 
@@ -192,7 +192,7 @@ def train_adapter(model_name: str, dataset_name: str, validation_size: float, le
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
     train_dataset, val_dataset = train_val_split(dataset, validation_size)
-    print(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
+    logging.info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
 
@@ -209,6 +209,7 @@ def train_adapter(model_name: str, dataset_name: str, validation_size: float, le
 
 @hydra.main(config_path='conf', config_name='train_adapter', version_base='1.1')
 def run(cfg: DictConfig) -> None:
+    logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
@@ -216,6 +217,7 @@ def run(cfg: DictConfig) -> None:
         cfg.data.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.training.epochs_num,
         cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
     )
+    logging.info('Finish!')
 
 
 if __name__ == '__main__':

@@ -60,3 +60,4 @@ Thumbs.db
 data/
 outputs/*/*/checkpoints/*
 !outputs/*/*/checkpoints/tb_runs
+!outputs/*/*/*.log
