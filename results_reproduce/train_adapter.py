@@ -213,9 +213,9 @@ def run(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
-        cfg.clip.model_name, cfg.data.dataset_name, cfg.data.validation_size, cfg.training.learning_rate, cfg.training.batch_size,
-        cfg.data.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.training.epochs_num,
-        cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
+        cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.training.learning_rate,
+        cfg.dataset.batch_size, cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates,
+        cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
 

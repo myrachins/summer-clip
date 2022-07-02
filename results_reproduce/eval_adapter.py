@@ -64,8 +64,8 @@ def run(cfg: DictConfig) -> None:
     adapter_fabric = hydra.utils.instantiate(train_cfg.adapter)
 
     eval_adapter(
-        cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.data.dataset_name,
-        cfg.prompting.classes, cfg.prompting.templates, cfg.data.batch_size, cfg.data.num_workers,
+        cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.dataset.dataset_name,
+        cfg.prompting.classes, cfg.prompting.templates, cfg.dataset.batch_size, cfg.dataset.num_workers,
         cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')

@@ -5,20 +5,18 @@ defaults:
   - adapter: linear
   - prompting: mnist
 
-prompting:
-  templates: ['a photo of a {}.']
-  classes:
-
 clip:
   model_name: ViT-B/16
 
-data:
+dataset:
   dataset_name: MNIST
-  validation_size: 0.25
-  checkpoints_dir: checkpoints
+  batch_size: 32
   num_workers: 2
+  validation_size: 0.25
+
+data:
+  checkpoints_dir: checkpoints
 
 training:
   learning_rate: 0.00001
-  batch_size: 32
   epochs_num: 20

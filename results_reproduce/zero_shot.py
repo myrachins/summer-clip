@@ -89,6 +89,9 @@ def compute_accuracy(model, zeroshot_weights, loader):
             top5 += acc5
             n += images.size(0)
 
+    if n <= 0:
+        return np.nan, np.nan
+    
     top1 = (top1 / n) * 100
     top5 = (top5 / n) * 100
 
