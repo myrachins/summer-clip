@@ -182,9 +182,9 @@ def train_val_split(dataset, validation_size: float):
     return random_split(dataset, [train_size, val_size])
 
 
-def train_adapter(model_name: str, dataset_name: str, validation_size: float, learning_rate: float, batch_size: int, num_workers: int,
+def train_adapter(model_name: str, dataset_name: str, validation_size: float, batch_size: int, num_workers: int,
                   adapter_fabric: ClipAdapterFabric, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
-                  epochs_num: int, checkpoints_dir: str, device: str, random_state: int) -> None:
+                  adam_params: tp.Dict[str, tp.Any], epochs_num: int, checkpoints_dir: str, device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
     torch_device = torch.device(device)
     checkpoints_path = Path(checkpoints_dir)
@@ -202,7 +202,7 @@ def train_adapter(model_name: str, dataset_name: str, validation_size: float, le
 
     loss = nn.CrossEntropyLoss()
     parameters = (clip_adapter.vision_adapter.parameters(), clip_adapter.text_adapter.parameters())
-    optimizer = torch.optim.Adam(itertools.chain(*parameters), lr=learning_rate, betas=(0.9, 0.98), eps=1e-6, weight_decay=0.2)
+    optimizer = torch.optim.Adam(itertools.chain(*parameters), **adam_params)
 
     train_model(train_loader, val_loader, clip_adapter_trainer, loss, optimizer, torch_device, epochs_num, checkpoints_path)
 
@@ -213,8 +213,8 @@ def run(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
-        cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.training.learning_rate,
-        cfg.dataset.batch_size, cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates,
+        cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.dataset.batch_size,
+        cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.training.adam_params,
         cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
