@@ -5,20 +5,23 @@ import random
 import fire
 import clip
 import torch
+import torch.cuda
+import torch.backends.cudnn
 import torch.utils
 import numpy as np
 from tqdm import tqdm
+from torch.utils.data.dataloader import DataLoader
 
 
 def get_dataset(dataset_name, preprocess):
     root = os.path.expanduser("~/.cache")
-    if dataset_name == 'CIFAR100':
+    if dataset_name == 'CIFAR100-test':
         from torchvision.datasets import CIFAR100
         return CIFAR100(root=root, train=False, transform=preprocess)
     elif dataset_name == 'CIFAR100-train':
         from torchvision.datasets import CIFAR100
         return CIFAR100(root=root, train=True, transform=preprocess)
-    elif dataset_name == 'CIFAR10':
+    elif dataset_name == 'CIFAR10-test':
         from torchvision.datasets import CIFAR10
         return CIFAR10(root=root, train=False, transform=preprocess)
     elif dataset_name == 'CIFAR10-train':
@@ -27,20 +30,25 @@ def get_dataset(dataset_name, preprocess):
     elif dataset_name == 'ImageNetV2':
         from imagenetv2_pytorch import ImageNetV2Dataset
         return ImageNetV2Dataset(location=root, transform=preprocess)
-    elif dataset_name == 'ImageNet':
+    elif dataset_name == 'ImageNet-val':
         from torchvision.datasets import ImageNet
         return ImageNet(f'{root}/ImageNet', split='val', transform=preprocess)
-    elif dataset_name == 'MNIST':
+    elif dataset_name == 'MNIST-test':
         from torchvision.datasets import MNIST
         return MNIST(root=root, train=False, transform=preprocess)
-        
+    elif dataset_name == 'MNIST-train':
+        from torchvision.datasets import MNIST
+        return MNIST(root=root, train=True, transform=preprocess)
+
     raise ValueError(f"Unsupported dataset: {dataset_name}")
 
 
-def load_promts(dataset_name):
+def load_promts(dataset_name: str):
     promts_mapping = {
-        'CIFAR100': 'cifar100', 'CIFAR10': 'cifar10', 'ImageNet': 'imagenet', 'ImageNetV2': 'imagenet',
-        'MNIST': 'mnist', 'CIFAR100-train': 'cifar100', 'CIFAR10-train': 'cifar10'
+        'CIFAR100-test': 'cifar100', 'CIFAR100-train': 'cifar100',
+        'CIFAR10-test': 'cifar10', 'CIFAR10-train': 'cifar10',
+        'ImageNet-val': 'imagenet', 'ImageNetV2': 'imagenet',
+        'MNIST-test': 'mnist', 'MNIST-train': 'mnist'
     }
     if dataset_name not in promts_mapping:
         raise ValueError("Unsupported dataset for promts: {dataset_name}")
@@ -54,9 +62,9 @@ def zeroshot_classifier(model, classnames, templates):
     with torch.no_grad():
         zeroshot_weights = []
         for classname in tqdm(classnames):
-            texts = [template.format(classname) for template in templates] #format with class
-            texts = clip.tokenize(texts).cuda() #tokenize
-            class_embeddings = model.encode_text(texts) #embed with text encoder
+            texts = [template.format(classname) for template in templates]
+            texts = clip.tokenize(texts).cuda()
+            class_embeddings = model.encode_text(texts)
             class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
             class_embedding = class_embeddings.mean(dim=0)
             class_embedding /= class_embedding.norm()
@@ -77,7 +85,7 @@ def compute_accuracy(model, zeroshot_weights, loader):
         for i, (images, target) in enumerate(tqdm(loader)):
             images = images.cuda()
             target = target.cuda()
-            
+
             # predict
             image_features = model.encode_image(images)
             image_features /= image_features.norm(dim=-1, keepdim=True)
@@ -91,7 +99,7 @@ def compute_accuracy(model, zeroshot_weights, loader):
 
     if n <= 0:
         return np.nan, np.nan
-    
+
     top1 = (top1 / n) * 100
     top5 = (top5 / n) * 100
 
@@ -102,7 +110,7 @@ def set_random_state(random_state: int):
     os.environ['PYTHONHASHSEED'] = str(random_state)
     random.seed(random_state)
     np.random.seed(random_state)
-    
+
     torch.manual_seed(random_state)
     torch.cuda.manual_seed(random_state)
     torch.cuda.manual_seed_all(random_state)
@@ -116,10 +124,10 @@ def run(model_name: str = 'ViT-L/14@336px', dataset_name: str = 'CIFAR100', batc
     set_random_state(random_state)
     model, preprocess = clip.load(model_name, device)
     dataset = get_dataset(dataset_name, preprocess)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
     classes, templates = load_promts(dataset_name)
     zeroshot_weights = zeroshot_classifier(model, classes, templates)
-    
+
     top1, top5 = compute_accuracy(model, zeroshot_weights, loader)
     print(f"Top-1 accuracy: {top1:.2f}")
     print(f"Top-5 accuracy: {top5:.2f}")

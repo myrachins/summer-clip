@@ -9,7 +9,7 @@ clip:
   model_name: ViT-B/16
 
 dataset:
-  dataset_name: MNIST
+  dataset_name: MNIST-test
   batch_size: 32
   num_workers: 2
   validation_size: 0.25
