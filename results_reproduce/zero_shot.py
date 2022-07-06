@@ -33,6 +33,9 @@ def get_dataset(dataset_name, preprocess):
     elif dataset_name == 'ImageNet-val':
         from torchvision.datasets import ImageNet
         return ImageNet(f'{root}/ImageNet', split='val', transform=preprocess)
+    elif dataset_name == 'ImageNet-train':
+        from torchvision.datasets import ImageNet
+        return ImageNet(f'{root}/ImageNet', split='train', transform=preprocess)
     elif dataset_name == 'MNIST-test':
         from torchvision.datasets import MNIST
         return MNIST(root=root, train=False, transform=preprocess)
