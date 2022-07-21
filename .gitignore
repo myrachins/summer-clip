@@ -59,6 +59,6 @@ Thumbs.db
 
 data/
 scripts/outs/
-outputs/*/*/checkpoints/*
-!outputs/*/*/checkpoints/tb_runs
+outputs/*/*/*
 !outputs/*/*/*.log
+!outputs/*/*/.hydra

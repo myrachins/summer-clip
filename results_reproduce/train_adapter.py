@@ -10,6 +10,7 @@ import torch.utils
 import torch.optim
 import clip
 import hydra
+import wandb
 import numpy as np
 from torch import nn
 from tqdm import tqdm
@@ -86,7 +87,7 @@ class LinearClipAdapterFabric(ClipAdapterFabric):
 
 
 def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss, optimizer: torch.optim.Optimizer,
-                device: torch.device, summary_writer: SummaryWriter, tb_loss_step: int):
+                device: torch.device):
     model.train()
     model = model.to(device)
     epoch_loss = 0.
@@ -102,16 +103,17 @@ def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEnt
         text_loss = loss(logits_per_text, dummy_labels)
         agg_loss = (image_loss + text_loss) / 2
 
-        summary_writer.add_scalar('loss-train-image', image_loss.item(), tb_loss_step)
-        summary_writer.add_scalar('loss-train-text', text_loss.item(), tb_loss_step)
-        summary_writer.add_scalar('loss-train-agg', agg_loss.item(), tb_loss_step)
-        tb_loss_step += 1
+        wandb.log({
+            'loss-train-image': image_loss.item(),
+            'loss-train-text': text_loss.item(),
+            'loss-train-agg': agg_loss.item(),
+        })
         epoch_loss += agg_loss.item()
 
         agg_loss.backward()
         optimizer.step()
 
-    return model, epoch_loss, optimizer, tb_loss_step
+    return model, epoch_loss, optimizer
 
 
 @torch.no_grad()
@@ -147,7 +149,7 @@ def eval_model(loader: DataLoader, model: ClipAdapterTrainer) -> tp.Tuple[float,
     return compute_accuracy(image_features, text_features, loader)
 
 
-def save_epoch_model(model: ClipAdapter, optimizer: torch.optim.Optimizer, tb_loss_step: int, epoch_num: int, checkpoints_dir: Path):
+def save_epoch_model(model: ClipAdapter, optimizer: torch.optim.Optimizer, epoch_num: int, checkpoints_dir: Path):
     epoch_dir = checkpoints_dir / f'epoch_{epoch_num}'
     epoch_dir.mkdir(parents=True, exist_ok=True)
 
@@ -162,34 +164,32 @@ def save_epoch_model(model: ClipAdapter, optimizer: torch.optim.Optimizer, tb_lo
 
     save_data(model_state_dict, 'model')
     save_data(optimizer.state_dict(), 'optimizer')
-    save_data(tb_loss_step, 'tb_loss_step')
 
 
 def train_model(train_loader: DataLoader, val_loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss,
                 optimizer: torch.optim.Optimizer, device: torch.device, epochs_num: int, checkpoints_dir: Path):
-    log_dir = checkpoints_dir / 'tb_runs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    summary_writer = SummaryWriter(log_dir)
-    tb_loss_step = 0
-
     for epoch_num in range(1, epochs_num + 1):
         print(f'Running epoch {epoch_num}...')
-        model, epoch_loss, optimizer, tb_loss_step = train_epoch(train_loader, model, loss, optimizer, device, summary_writer, tb_loss_step)
+        model, epoch_loss, optimizer = train_epoch(train_loader, model, loss, optimizer, device)
         print('Evaluating model on train...')
         eval_top1, eval_top5 = eval_model(train_loader, model)
-        summary_writer.add_scalar('train-epoch-sum-loss', epoch_loss, epoch_num)
-        summary_writer.add_scalar('train-epoch-acc@1', eval_top1, epoch_num)
-        summary_writer.add_scalar('train-epoch-acc@5', eval_top5, epoch_num)
+        wandb.log({
+            'train-epoch-sum-loss': epoch_loss,
+            'train-epoch-acc@1': eval_top1,
+            'train-epoch-acc@5': eval_top5,
+        })
         logging.info(f'{epoch_num=}, train-acc@1: {eval_top1}')
         logging.info(f'{epoch_num=}, train-acc@5: {eval_top5}')
         print('Evaluating model on validation...')
         eval_top1, eval_top5 = eval_model(val_loader, model)
-        summary_writer.add_scalar('val-epoch-acc@1', eval_top1, epoch_num)
-        summary_writer.add_scalar('val-epoch-acc@5', eval_top5, epoch_num)
+        wandb.log({
+            'val-epoch-acc@1': eval_top1,
+            'val-epoch-acc@5': eval_top5,
+        })
         logging.info(f'{epoch_num=}, val-acc@1: {eval_top1}')
         logging.info(f'{epoch_num=}, val-acc@5: {eval_top5}')
         print(f'Saving checkpoint after {epoch_num} epoch...')
-        save_epoch_model(model.clip_adapter, optimizer, tb_loss_step, epoch_num, checkpoints_dir)
+        save_epoch_model(model.clip_adapter, optimizer, epoch_num, checkpoints_dir)
 
 
 def train_val_split(dataset, validation_size: float):
@@ -231,6 +231,7 @@ def train_adapter(model_name: str, dataset_name: str, validation_size: float, ba
 def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))
+    wandb.init(project='train_adapter', config=tp.cast(dict, OmegaConf.to_container(cfg)))
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
         cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.dataset.batch_size,
