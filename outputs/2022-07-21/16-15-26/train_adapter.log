@@ -1,0 +1,15 @@
+[2022-07-21 16:15:26,236][root][INFO] - Start!
+[2022-07-21 16:15:37,604][root][INFO] - train-size=10000, val-size=0
+[2022-07-21 16:16:21,876][root][INFO] - epoch_num=1, train-acc@1: 56.169999999999995
+[2022-07-21 16:16:21,876][root][INFO] - epoch_num=1, train-acc@5: 93.64
+[2022-07-21 16:16:21,989][root][INFO] - epoch_num=1, val-acc@1: nan
+[2022-07-21 16:16:21,990][root][INFO] - epoch_num=1, val-acc@5: nan
+[2022-07-21 16:17:05,845][root][INFO] - epoch_num=2, train-acc@1: 70.62
+[2022-07-21 16:17:05,848][root][INFO] - epoch_num=2, train-acc@5: 96.49
+[2022-07-21 16:17:06,008][root][INFO] - epoch_num=2, val-acc@1: nan
+[2022-07-21 16:17:06,009][root][INFO] - epoch_num=2, val-acc@5: nan
+[2022-07-21 16:17:49,705][root][INFO] - epoch_num=3, train-acc@1: 80.47999999999999
+[2022-07-21 16:17:49,706][root][INFO] - epoch_num=3, train-acc@5: 98.71
+[2022-07-21 16:17:49,860][root][INFO] - epoch_num=3, val-acc@1: nan
+[2022-07-21 16:17:49,861][root][INFO] - epoch_num=3, val-acc@5: nan
+[2022-07-21 16:17:49,905][root][INFO] - Finish!

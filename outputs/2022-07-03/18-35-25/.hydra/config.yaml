@@ -1,0 +1,27 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+clip:
+  model_name: ViT-B/16
+dataset:
+  dataset_name: CIFAR100-train
+  batch_size: 32
+  num_workers: 2
+  validation_size: 0.25
+data:
+  checkpoints_dir: checkpoints
+training:
+  epochs_num: 20
+  adam_params:
+    lr: 1.0e-05
+    betas:
+    - 0.9
+    - 0.98
+    eps: 1.0e-06
+    weight_decay: 0.2
+adapter:
+  _target_: results_reproduce.train_adapter.LinearClipAdapterFabric

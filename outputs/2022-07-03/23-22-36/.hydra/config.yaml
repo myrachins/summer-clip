@@ -1,0 +1,54 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  - a blurry photo of a {}.
+  - a black and white photo of a {}.
+  - a low contrast photo of a {}.
+  - a high contrast photo of a {}.
+  - a bad photo of a {}.
+  - a good photo of a {}.
+  - a photo of a small {}.
+  - a photo of a big {}.
+  - a photo of the {}.
+  - a blurry photo of the {}.
+  - a black and white photo of the {}.
+  - a low contrast photo of the {}.
+  - a high contrast photo of the {}.
+  - a bad photo of the {}.
+  - a good photo of the {}.
+  - a photo of the small {}.
+  - a photo of the big {}.
+  classes:
+  - airplane
+  - automobile
+  - bird
+  - cat
+  - deer
+  - dog
+  - frog
+  - horse
+  - ship
+  - truck
+meta:
+  device: cuda
+  random_state: 42
+clip:
+  model_name: ViT-B/16
+dataset:
+  dataset_name: CIFAR10-train
+  batch_size: 32
+  num_workers: 2
+  validation_size: 0.25
+data:
+  checkpoints_dir: checkpoints
+training:
+  epochs_num: 20
+  adam_params:
+    lr: 1.0e-05
+    betas:
+    - 0.9
+    - 0.98
+    eps: 1.0e-06
+    weight_decay: 0.2
+adapter:
+  _target_: results_reproduce.train_adapter.LinearClipAdapterFabric

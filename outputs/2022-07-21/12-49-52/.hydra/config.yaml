@@ -1,0 +1,14 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+eval:
+  checkpoint_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/11-36-21/checkpoints/epoch_1/model.ckpt
+  train_config_path: null
+dataset:
+  dataset_name: MNIST-test
+  num_workers: 2
+  batch_size: 32
