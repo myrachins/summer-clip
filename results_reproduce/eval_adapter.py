@@ -10,6 +10,7 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from results_reproduce import zero_shot
 from results_reproduce import train_adapter
+from results_reproduce import save_features
 
 
 def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_path: str, device: str) -> train_adapter.ClipAdapter:
@@ -22,26 +23,29 @@ def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_pa
     clip_adapter.load_state_dict(model_checkpoint)
 
     clip_adapter.clip_model = clip_model
-    train_adapter.convert_model_to_fp32(clip_adapter)
+    # train_adapter.convert_model_to_fp32(clip_adapter)
 
     return clip_adapter
 
 
 def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric: train_adapter.ClipAdapterFabric,
                  dataset_name: str, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
-                 batch_size: int = 32, num_workers: int = 2, device: str = 'cuda', random_state: int = 42) -> None:
+                 image_features_path: str, batch_size: int, num_workers: int, device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
 
     clip_model, preprocess = clip.load(visual_encoder_name, device)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
-    classes, templates = zero_shot.load_promts(dataset_name)
+    indexed_dataset = save_features.IndexedDataset(dataset)
+    loader = DataLoader(indexed_dataset, batch_size=batch_size, num_workers=num_workers)
 
     clip_adapter = adapter_fabric.create_adapter(clip_model)
     clip_adapter = load_checkpoint_state(clip_adapter, checkpoint_path, device)
+    clip_classes = classes or dataset.classes
+    text_features = zero_shot.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
+    image_features = torch.load(image_features_path)
+    clip_adapter_trainer = train_adapter.ClipAdapterTrainer(clip_adapter, image_features, text_features)
 
-    zeroshot_weights = zero_shot.zeroshot_classifier(clip_adapter, classes, templates)
-    top1, top5 = zero_shot.compute_accuracy(clip_adapter, zeroshot_weights, loader)
+    top1, top5 = train_adapter.eval_model(loader, clip_adapter_trainer)
     logging.info(f'acc@1: {top1}')
     logging.info(f'acc@5: {top5}')
 
@@ -61,12 +65,13 @@ def run(cfg: DictConfig) -> None:
 
     train_cfg = load_train_config(cfg)
     visual_encoder_name = train_cfg.clip.model_name
+    image_features_path = train_cfg.dataset.image_features_path
     adapter_fabric = hydra.utils.instantiate(train_cfg.adapter)
 
     eval_adapter(
         cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.dataset.dataset_name,
-        cfg.prompting.classes, cfg.prompting.templates, cfg.dataset.batch_size, cfg.dataset.num_workers,
-        cfg.meta.device, cfg.meta.random_state
+        cfg.prompting.classes, cfg.prompting.templates, image_features_path, cfg.dataset.batch_size,
+        cfg.dataset.num_workers, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
 

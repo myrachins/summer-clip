@@ -10,14 +10,17 @@ import torch.utils
 import torch.optim
 import clip
 import hydra
+import numpy as np
 from torch import nn
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
+from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataset import random_split
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
 
 from results_reproduce import zero_shot
+from results_reproduce import save_features
 
 
 class ClipAdapter(nn.Module):
@@ -39,19 +42,16 @@ class ClipAdapter(nn.Module):
 
 
 class ClipAdapterTrainer(nn.Module):
-    def __init__(self, clip_adapter: ClipAdapter, classes: tp.List[str], templates: tp.List[str]) -> None:
+    def __init__(self, clip_adapter: ClipAdapter, image_features: torch.Tensor, text_features: torch.Tensor) -> None:
         super().__init__()
         self.clip_adapter = clip_adapter
-        self.classes = classes
-        self.templates = templates
+        self.image_features = image_features.float()
+        self.text_features = text_features.float()
 
-        zeroshot_weights = zero_shot.zeroshot_classifier(clip_adapter.clip_model, classes, templates)
-        self.zeroshot_weights = nn.parameter.Parameter(zeroshot_weights, requires_grad=False)
-
-    def forward(self, image, label):
+    def forward(self, index, label):
         with torch.no_grad():
-            image_features = self.clip_adapter.clip_model.encode_image(image)
-            text_features = self.zeroshot_weights[:, label].t()
+            image_features = self.image_features[:, index].t()
+            text_features = self.text_features[:, label].t()
 
         image_features = self.clip_adapter.vision_adapter(image_features)
         text_features = self.clip_adapter.text_adapter(text_features)
@@ -85,27 +85,18 @@ class LinearClipAdapterFabric(ClipAdapterFabric):
         return ClipAdapter(clip_model, vision_adapter, text_adapter)
 
 
-# https://github.com/openai/CLIP/issues/57
-def convert_model_to_fp32(model: nn.Module) -> None:
-    for param in model.parameters():
-        param.data = param.data.float()
-        if param.requires_grad and param.grad is not None:
-            param.grad.data = param.grad.data.float()
-
-
 def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss, optimizer: torch.optim.Optimizer,
                 device: torch.device, summary_writer: SummaryWriter, tb_loss_step: int):
     model.train()
     model = model.to(device)
-    convert_model_to_fp32(model)
     epoch_loss = 0.
 
-    for images, labels in tqdm(loader):
+    for _, labels, indexes in tqdm(loader):
         model.zero_grad()
-        images = images.to(device)
+        indexes = indexes.to(device)
         labels = labels.to(device)
 
-        logits_per_image, logits_per_text = model(images, labels)
+        logits_per_image, logits_per_text = model(indexes, labels)
         dummy_labels = torch.arange(len(labels), device=device)
         image_loss = loss(logits_per_image, dummy_labels)
         text_loss = loss(logits_per_text, dummy_labels)
@@ -118,17 +109,42 @@ def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEnt
         epoch_loss += agg_loss.item()
 
         agg_loss.backward()
-        # convert_models_to_fp32(model)
         optimizer.step()
-        # clip.model.convert_weights(model)
 
     return model, epoch_loss, optimizer, tb_loss_step
 
 
+@torch.no_grad()
+def compute_accuracy(image_features, text_features, loader):
+    image_features = image_features / image_features.norm(dim=0, keepdim=True)
+    text_features = text_features / text_features.norm(dim=0, keepdim=True)
+
+    top1, top5, n = 0., 0., 0.
+    for _, target, index in tqdm(loader):
+        # predict
+        batch_image_features = image_features[:, index]
+        logits = 100. * batch_image_features.t() @ text_features
+
+        # measure accuracy
+        target = target.to(logits.device)
+        acc1, acc5 = zero_shot.accuracy(logits, target, topk=(1, 5))
+        top1 += acc1
+        top5 += acc5
+        n += target.size(0)
+
+    if n <= 0:
+        return np.nan, np.nan
+
+    top1 = (top1 / n) * 100
+    top5 = (top5 / n) * 100
+
+    return top1, top5
+
+
 def eval_model(loader: DataLoader, model: ClipAdapterTrainer) -> tp.Tuple[float, float]:
-    # recompute zeroshot_weights since we need them with adapter performed (can be optimized)
-    zeroshot_weights = zero_shot.zeroshot_classifier(model.clip_adapter, model.classes, model.templates)
-    return zero_shot.compute_accuracy(model.clip_adapter, zeroshot_weights, loader)
+    image_features = model.clip_adapter.vision_adapter(model.image_features.t()).t()
+    text_features = model.clip_adapter.text_adapter(model.text_features.t()).t()
+    return compute_accuracy(image_features, text_features, loader)
 
 
 def save_epoch_model(model: ClipAdapter, optimizer: torch.optim.Optimizer, tb_loss_step: int, epoch_num: int, checkpoints_dir: Path):
@@ -184,21 +200,25 @@ def train_val_split(dataset, validation_size: float):
 
 def train_adapter(model_name: str, dataset_name: str, validation_size: float, batch_size: int, num_workers: int,
                   adapter_fabric: ClipAdapterFabric, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
-                  adam_params: tp.Dict[str, tp.Any], epochs_num: int, checkpoints_dir: str, device: str, random_state: int) -> None:
+                  image_features_path: str, adam_params: tp.Dict[str, tp.Any], epochs_num: int,
+                  checkpoints_dir: str, device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
     torch_device = torch.device(device)
     checkpoints_path = Path(checkpoints_dir)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = zero_shot.get_dataset(dataset_name, preprocess)
-    train_dataset, val_dataset = train_val_split(dataset, validation_size)
+    indexed_dataset = save_features.IndexedDataset(dataset)
+    train_dataset, val_dataset = train_val_split(indexed_dataset, validation_size)
     logging.info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
 
     clip_adapter = adapter_fabric.create_adapter(clip_model)
     clip_classes = classes or dataset.classes
-    clip_adapter_trainer = ClipAdapterTrainer(clip_adapter, clip_classes, templates)
+    text_features = zero_shot.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
+    image_features = torch.load(image_features_path)
+    clip_adapter_trainer = ClipAdapterTrainer(clip_adapter, image_features, text_features)
 
     loss = nn.CrossEntropyLoss()
     parameters = (clip_adapter.vision_adapter.parameters(), clip_adapter.text_adapter.parameters())
@@ -214,8 +234,8 @@ def run(cfg: DictConfig) -> None:
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
         cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.dataset.batch_size,
-        cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.training.adam_params,
-        cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
+        cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.dataset.image_features_path,
+        cfg.training.adam_params, cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
 
