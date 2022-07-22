@@ -1,0 +1,15 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+clip:
+  model_name: ViT-B/16
+dataset:
+  dataset_name: CIFAR10-train
+  batch_size: 512
+  num_workers: 2
+data:
+  output_path: image_features.pt

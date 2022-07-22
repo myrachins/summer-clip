@@ -1,0 +1,15 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+eval:
+  checkpoint_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-53-05/checkpoints/epoch_20/model.ckpt
+  train_config_path: null
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-47-25/image_features.pt
+dataset:
+  dataset_name: CIFAR100-test
+  num_workers: 2
+  batch_size: 32
