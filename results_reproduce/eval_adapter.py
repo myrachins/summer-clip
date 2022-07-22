@@ -65,12 +65,11 @@ def run(cfg: DictConfig) -> None:
 
     train_cfg = load_train_config(cfg)
     visual_encoder_name = train_cfg.clip.model_name
-    image_features_path = train_cfg.dataset.image_features_path
     adapter_fabric = hydra.utils.instantiate(train_cfg.adapter)
 
     eval_adapter(
         cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.dataset.dataset_name,
-        cfg.prompting.classes, cfg.prompting.templates, image_features_path, cfg.dataset.batch_size,
+        cfg.prompting.classes, cfg.prompting.templates, cfg.eval.image_features_path, cfg.dataset.batch_size,
         cfg.dataset.num_workers, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
