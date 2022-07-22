@@ -3,20 +3,18 @@ defaults:
   - adapter_setup
   - _self_
   - adapter: linear
-  - prompting: mnist
+  - dataset: cifar10_train
+  # - prompting: cifar100
 
 clip:
   model_name: ViT-B/16
 
-dataset:
-  dataset_name: MNIST-test
+data:
   batch_size: 32
   num_workers: 2
   validation_size: 0
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/11-15-13/image_features.pt
-
-data:
   checkpoints_dir: checkpoints
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-44-05/image_features.pt
 
 training:
   epochs_num: 20

@@ -1,0 +1,3 @@
+_target_: torchvision.datasets.CIFAR10
+root: ${path.cache_dir}
+train: true

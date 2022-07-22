@@ -23,18 +23,17 @@ def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_pa
     clip_adapter.load_state_dict(model_checkpoint)
 
     clip_adapter.clip_model = clip_model
-    # train_adapter.convert_model_to_fp32(clip_adapter)
 
     return clip_adapter
 
 
 def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric: train_adapter.ClipAdapterFabric,
-                 dataset_name: str, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
+                 dataset_cfg: DictConfig, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
                  image_features_path: str, batch_size: int, num_workers: int, device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
 
     clip_model, preprocess = clip.load(visual_encoder_name, device)
-    dataset = zero_shot.get_dataset(dataset_name, preprocess)
+    dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
     indexed_dataset = save_features.IndexedDataset(dataset)
     loader = DataLoader(indexed_dataset, batch_size=batch_size, num_workers=num_workers)
 
@@ -68,9 +67,9 @@ def run(cfg: DictConfig) -> None:
     adapter_fabric = hydra.utils.instantiate(train_cfg.adapter)
 
     eval_adapter(
-        cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.dataset.dataset_name,
-        cfg.prompting.classes, cfg.prompting.templates, cfg.eval.image_features_path, cfg.dataset.batch_size,
-        cfg.dataset.num_workers, cfg.meta.device, cfg.meta.random_state
+        cfg.eval.checkpoint_path, visual_encoder_name, adapter_fabric, cfg.dataset,
+        cfg.prompting.classes, cfg.prompting.templates, cfg.eval.image_features_path, cfg.data.batch_size,
+        cfg.data.num_workers, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
 

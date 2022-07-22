@@ -7,7 +7,7 @@ clip:
   model_name: ViT-B/16
 
 dataset:
-  dataset_name: MNIST-test
+  dataset_name: ImageNet-val
   batch_size: 512
   num_workers: 2
 

@@ -198,7 +198,7 @@ def train_val_split(dataset, validation_size: float):
     return random_split(dataset, [train_size, val_size])
 
 
-def train_adapter(model_name: str, dataset_name: str, validation_size: float, batch_size: int, num_workers: int,
+def train_adapter(model_name: str, dataset_cfg: DictConfig, validation_size: float, batch_size: int, num_workers: int,
                   adapter_fabric: ClipAdapterFabric, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
                   image_features_path: str, adam_params: tp.Dict[str, tp.Any], epochs_num: int,
                   checkpoints_dir: str, device: str, random_state: int) -> None:
@@ -207,7 +207,7 @@ def train_adapter(model_name: str, dataset_name: str, validation_size: float, ba
     checkpoints_path = Path(checkpoints_dir)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
-    dataset = zero_shot.get_dataset(dataset_name, preprocess)
+    dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
     indexed_dataset = save_features.IndexedDataset(dataset)
     train_dataset, val_dataset = train_val_split(indexed_dataset, validation_size)
     logging.info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
@@ -234,8 +234,8 @@ def run(cfg: DictConfig) -> None:
     wandb.init(project='train_adapter', config=tp.cast(dict, OmegaConf.to_container(cfg)))
     adapter_fabric = hydra.utils.instantiate(cfg.adapter)
     train_adapter(
-        cfg.clip.model_name, cfg.dataset.dataset_name, cfg.dataset.validation_size, cfg.dataset.batch_size,
-        cfg.dataset.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.dataset.image_features_path,
+        cfg.clip.model_name, cfg.dataset, cfg.data.validation_size, cfg.data.batch_size,
+        cfg.data.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.data.image_features_path,
         cfg.training.adam_params, cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
