@@ -36,12 +36,12 @@ def calculate_image_features(model, loader, device):
     return images, indexes
 
 
-def save_features(model_name: str, dataset_name: str, output_path: str, batch_size: int, num_workers: int,
+def save_features(model_name: str, dataset_cfg: DictConfig, output_path: str, batch_size: int, num_workers: int,
                   device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
-    dataset = zero_shot.get_dataset(dataset_name, preprocess)
+    dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
     indexed_dataset = IndexedDataset(dataset)
     indexed_loader = DataLoader(indexed_dataset, batch_size=batch_size, num_workers=num_workers)
 
@@ -55,8 +55,8 @@ def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))
     save_features(
-        cfg.clip.model_name, cfg.dataset.dataset_name, cfg.data.output_path, cfg.dataset.batch_size,
-        cfg.dataset.num_workers, cfg.meta.device, cfg.meta.random_state
+        cfg.clip.model_name, cfg.dataset, cfg.data.output_path, cfg.data.batch_size,
+        cfg.data.num_workers, cfg.meta.device, cfg.meta.random_state
     )
     logging.info('Finish!')
 
