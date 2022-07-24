@@ -15,10 +15,10 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
+from torchvision.datasets import ImageNet
 from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataset import random_split
 from torch.utils.data.dataloader import DataLoader
-from torch.utils.tensorboard.writer import SummaryWriter
 
 from results_reproduce import zero_shot
 from results_reproduce import save_features
@@ -86,13 +86,32 @@ class LinearClipAdapterFabric(ClipAdapterFabric):
         return ClipAdapter(clip_model, vision_adapter, text_adapter)
 
 
+class NoImageIndexedDataset(Dataset):
+    def __init__(self, source_dataset) -> None:
+        super().__init__()
+        self.source_dataset = source_dataset
+
+    def __len__(self):
+        return len(self.source_dataset)
+
+    def __getitem__(self, index):
+        _, label = self.source_dataset[index]
+        return label, index
+
+
+class NoImageImageNetDataset(ImageNet):
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs = {**kwargs, **{'loader': lambda _: None}}
+        super().__init__(*args, **kwargs)
+
+
 def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss, optimizer: torch.optim.Optimizer,
                 device: torch.device):
     model.train()
     model = model.to(device)
     epoch_loss = 0.
 
-    for _, labels, indexes in tqdm(loader):
+    for labels, indexes in tqdm(loader):
         model.zero_grad()
         indexes = indexes.to(device)
         labels = labels.to(device)
@@ -122,7 +141,7 @@ def compute_accuracy(image_features, text_features, loader):
     text_features = text_features / text_features.norm(dim=0, keepdim=True)
 
     top1, top5, n = 0., 0., 0.
-    for _, target, index in tqdm(loader):
+    for target, index in tqdm(loader):
         # predict
         batch_image_features = image_features[:, index]
         logits = 100. * batch_image_features.t() @ text_features
@@ -144,6 +163,7 @@ def compute_accuracy(image_features, text_features, loader):
 
 
 def eval_model(loader: DataLoader, model: ClipAdapterTrainer) -> tp.Tuple[float, float]:
+    model.eval()
     image_features = model.clip_adapter.vision_adapter(model.image_features.t()).t()
     text_features = model.clip_adapter.text_adapter(model.text_features.t()).t()
     return compute_accuracy(image_features, text_features, loader)
@@ -206,9 +226,9 @@ def train_adapter(model_name: str, dataset_cfg: DictConfig, validation_size: flo
     torch_device = torch.device(device)
     checkpoints_path = Path(checkpoints_dir)
 
-    clip_model, preprocess = clip.load(model_name, device, jit=False)
-    dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
-    indexed_dataset = save_features.IndexedDataset(dataset)
+    clip_model, _ = clip.load(model_name, device, jit=False)
+    dataset = hydra.utils.instantiate(dataset_cfg)
+    indexed_dataset = NoImageIndexedDataset(dataset)
     train_dataset, val_dataset = train_val_split(indexed_dataset, validation_size)
     logging.info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)

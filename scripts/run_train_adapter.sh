@@ -17,3 +17,4 @@ export WANDB_CONSOLE="off"
 
 cd $SUMMER_CLIP_PATH || exit
 python -u $PY_PATH
+# kernprof -l $PY_PATH
