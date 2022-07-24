@@ -1,0 +1,6 @@
+[2022-07-23 13:15:25,010][root][INFO] - Start!
+[2022-07-23 13:15:35,319][root][INFO] - train-size=60000, val-size=0
+[2022-07-23 13:20:10,742][root][INFO] - epoch_num=1, train-acc@1: 96.18166666666667
+[2022-07-23 13:20:10,744][root][INFO] - epoch_num=1, train-acc@5: 99.70333333333333
+[2022-07-23 13:20:10,868][root][INFO] - epoch_num=1, val-acc@1: nan
+[2022-07-23 13:20:10,869][root][INFO] - epoch_num=1, val-acc@5: nan
