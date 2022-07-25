@@ -32,9 +32,9 @@ def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric:
                  image_features_path: str, batch_size: int, num_workers: int, device: str, random_state: int) -> None:
     zero_shot.set_random_state(random_state)
 
-    clip_model, preprocess = clip.load(visual_encoder_name, device)
-    dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
-    indexed_dataset = save_features.IndexedDataset(dataset)
+    clip_model, _ = clip.load(visual_encoder_name, device)
+    dataset = hydra.utils.instantiate(dataset_cfg)
+    indexed_dataset = train_adapter.NoImageIndexedDataset(dataset)
     loader = DataLoader(indexed_dataset, batch_size=batch_size, num_workers=num_workers)
 
     clip_adapter = adapter_fabric.create_adapter(clip_model)

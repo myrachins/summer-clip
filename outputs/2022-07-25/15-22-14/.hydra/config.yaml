@@ -1,0 +1,20 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+path:
+  cache_dir: ~/.cache
+eval:
+  checkpoint_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09/checkpoints/epoch_20/model.ckpt
+  train_config_path: null
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-38-43/image_features.pt
+data:
+  num_workers: 2
+  batch_size: 512
+dataset:
+  _target_: torchvision.datasets.CIFAR100
+  root: ${path.cache_dir}
+  train: true

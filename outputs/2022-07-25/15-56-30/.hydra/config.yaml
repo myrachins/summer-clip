@@ -1,15 +1,20 @@
-defaults:
-  - hydra_setup
-  - adapter_setup
-  - _self_
-  - dataset: mnist_test
-  # - prompting: mnist
-
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+path:
+  cache_dir: ~/.cache
 eval:
   checkpoint_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-02-09/checkpoints/epoch_20/model.ckpt
-  train_config_path: # if none, it is deducted from checkpoint_path
+  train_config_path: null
   image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-57-54/image_features.pt
-
 data:
   num_workers: 2
   batch_size: 512
+dataset:
+  _target_: torchvision.datasets.MNIST
+  root: ${path.cache_dir}
+  train: false
