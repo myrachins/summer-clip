@@ -3,7 +3,7 @@ defaults:
   - adapter_setup
   - _self_
   - adapter: linear
-  - dataset: imagenet_train
+  - dataset: cifar100_train
   # - prompting: cifar100
 
 clip:
@@ -14,7 +14,7 @@ data:
   num_workers: 2
   validation_size: 0
   checkpoints_dir: checkpoints
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-38-43/image_features.pt
 
 training:
   epochs_num: 20
