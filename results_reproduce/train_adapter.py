@@ -21,8 +21,7 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataset import random_split
 from torch.utils.data.dataloader import DataLoader
 
-from results_reproduce import zero_shot
-from results_reproduce import save_features
+from results_reproduce import eval_clip
 
 
 class ClipAdapter(nn.Module):
@@ -146,6 +145,12 @@ def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEnt
     return model, epoch_loss, optimizer
 
 
+def accuracy(output, target, topk=(1,)):
+    pred = output.topk(max(topk), 1, True, True)[1].t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) for k in topk]
+
+
 @torch.no_grad()
 def compute_accuracy(image_features, text_features, loader):
     image_features = image_features / image_features.norm(dim=0, keepdim=True)
@@ -159,7 +164,7 @@ def compute_accuracy(image_features, text_features, loader):
 
         # measure accuracy
         target = target.to(logits.device)
-        acc1, acc5 = zero_shot.accuracy(logits, target, topk=(1, 5))
+        acc1, acc5 = accuracy(logits, target, topk=(1, 5))
         top1 += acc1
         top5 += acc5
         n += target.size(0)
@@ -233,7 +238,7 @@ def train_adapter(model_name: str, dataset_cfg: DictConfig, validation_size: flo
                   adapter_fabric: ClipAdapterFabric, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
                   image_features_path: str, adam_params: tp.Dict[str, tp.Any], epochs_num: int,
                   checkpoints_dir: str, device: str, random_state: int) -> None:
-    zero_shot.set_random_state(random_state)
+    eval_clip.set_random_state(random_state)
     torch_device = torch.device(device)
     checkpoints_path = Path(checkpoints_dir)
 
@@ -247,7 +252,7 @@ def train_adapter(model_name: str, dataset_cfg: DictConfig, validation_size: flo
 
     clip_adapter = adapter_fabric.create_adapter(clip_model)
     clip_classes = classes or dataset.classes
-    text_features = zero_shot.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
+    text_features = eval_clip.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
     image_features = torch.load(image_features_path)
     clip_adapter_trainer = ClipAdapterTrainer(clip_adapter, image_features, text_features)
 

@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
 from omegaconf import DictConfig, OmegaConf
 
-from results_reproduce import zero_shot
+from results_reproduce import eval_clip
 
 
 class IndexedDataset(Dataset):
@@ -38,7 +38,7 @@ def calculate_image_features(model, loader, device):
 
 def save_features(model_name: str, dataset_cfg: DictConfig, output_path: str, batch_size: int, num_workers: int,
                   device: str, random_state: int) -> None:
-    zero_shot.set_random_state(random_state)
+    eval_clip.set_random_state(random_state)
 
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)

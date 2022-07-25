@@ -8,9 +8,8 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
-from results_reproduce import zero_shot
+from results_reproduce import eval_clip
 from results_reproduce import train_adapter
-from results_reproduce import save_features
 
 
 def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_path: str, device: str) -> train_adapter.ClipAdapter:
@@ -30,7 +29,7 @@ def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_pa
 def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric: train_adapter.ClipAdapterFabric,
                  dataset_cfg: DictConfig, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
                  image_features_path: str, batch_size: int, num_workers: int, device: str, random_state: int) -> None:
-    zero_shot.set_random_state(random_state)
+    eval_clip.set_random_state(random_state)
 
     clip_model, _ = clip.load(visual_encoder_name, device)
     dataset = hydra.utils.instantiate(dataset_cfg)
@@ -40,7 +39,7 @@ def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric:
     clip_adapter = adapter_fabric.create_adapter(clip_model)
     clip_adapter = load_checkpoint_state(clip_adapter, checkpoint_path, device)
     clip_classes = classes or dataset.classes
-    text_features = zero_shot.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
+    text_features = eval_clip.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
     image_features = torch.load(image_features_path)
     clip_adapter_trainer = train_adapter.ClipAdapterTrainer(clip_adapter, image_features, text_features)
 
