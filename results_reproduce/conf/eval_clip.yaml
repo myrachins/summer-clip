@@ -1,0 +1,16 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - _self_
+  - dataset: imagenet_v2
+  - prompting: imagenet
+
+clip:
+  model_name: ViT-B/16
+
+eval:
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/16-18-44/image_features.pt
+
+data:
+  num_workers: 2
+  batch_size: 512
