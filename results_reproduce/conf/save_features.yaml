@@ -2,7 +2,7 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: mnist_train
+  - dataset: imagenet_v2
 
 clip:
   model_name: ViT-B/16

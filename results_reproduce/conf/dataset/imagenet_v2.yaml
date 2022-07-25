@@ -1,2 +1,3 @@
-_target_: imagenetv2_pytorch.ImageNetV2Dataset
+_target_: results_reproduce.train_adapter.ImageNetV2Wrapper
 location: ${path.cache_dir}
+image_net_root: ${path.cache_dir}/ImageNet

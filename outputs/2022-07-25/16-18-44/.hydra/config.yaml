@@ -1,0 +1,18 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+path:
+  cache_dir: /home/myurachinskiy/.cache
+clip:
+  model_name: ViT-B/16
+data:
+  batch_size: 512
+  num_workers: 2
+  output_path: image_features.pt
+dataset:
+  _target_: imagenetv2_pytorch.ImageNetV2Dataset
+  location: ${path.cache_dir}
