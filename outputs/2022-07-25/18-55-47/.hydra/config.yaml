@@ -1,0 +1,20 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+path:
+  cache_dir: /home/myurachinskiy/.cache
+clip:
+  model_name: ViT-B/16
+eval:
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-57-54/image_features.pt
+data:
+  num_workers: 2
+  batch_size: 512
+dataset:
+  _target_: torchvision.datasets.MNIST
+  root: ${path.cache_dir}
+  train: false
