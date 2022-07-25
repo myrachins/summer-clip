@@ -1,0 +1,3 @@
+_target_: torchvision.datasets.MNIST
+root: ${path.cache_dir}
+train: false

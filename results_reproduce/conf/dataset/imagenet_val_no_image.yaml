@@ -1,0 +1,3 @@
+_target_: results_reproduce.train_adapter.NoImageImageNetDataset
+root: ${path.cache_dir}/ImageNet
+split: val

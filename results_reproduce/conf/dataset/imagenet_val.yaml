@@ -1,0 +1,3 @@
+_target_: torchvision.datasets.ImageNet
+root: ${path.cache_dir}/ImageNet
+split: val

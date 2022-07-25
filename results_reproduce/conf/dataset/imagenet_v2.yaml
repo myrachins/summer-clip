@@ -1,0 +1,2 @@
+_target_: imagenetv2_pytorch.ImageNetV2Dataset
+location: ${path.cache_dir}
