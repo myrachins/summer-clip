@@ -86,6 +86,37 @@ class LinearClipAdapterFabric(ClipAdapterFabric):
         return ClipAdapter(clip_model, vision_adapter, text_adapter)
 
 
+class OriginalClipAdapter(nn.Module):
+    def __init__(self, input_dim, dim_reduction, res_ratio):
+        super().__init__()
+        middle_dim = input_dim // dim_reduction
+        self.fc = nn.Sequential(
+            nn.Linear(input_dim, middle_dim, bias=False),
+            nn.ReLU(),
+            nn.Linear(middle_dim, input_dim, bias=False),
+            nn.ReLU()
+        )
+        self.res_ratio = res_ratio
+
+    def forward(self, x):
+        x = x / x.norm(dim=1, keepdim=True)
+        x = self.res_ratio * self.fc(x) + (1 - self.res_ratio) * x
+        return x
+
+
+class OriginalImageClipAdapterFabric(ClipAdapterFabric):
+    def __init__(self, dim_reduction, res_ratio) -> None:
+        super().__init__()
+        self.dim_reduction = dim_reduction
+        self.res_ratio = res_ratio
+
+    def create_adapter(self, clip_model) -> ClipAdapter:
+        input_dim = clip_model.text_projection.size(dim=1)
+        vision_adapter = OriginalClipAdapter(input_dim, self.dim_reduction, self.res_ratio)
+        text_adapter = nn.Identity()
+        return ClipAdapter(clip_model, vision_adapter, text_adapter)
+
+
 class NoImageIndexedDataset(Dataset):
     def __init__(self, source_dataset) -> None:
         super().__init__()
