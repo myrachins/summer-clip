@@ -1,0 +1,4 @@
+omegaconf
+wandb
+ptflops
+pytorch_gan_metrics
