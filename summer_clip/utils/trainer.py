@@ -1,0 +1,102 @@
+import os
+from omegaconf import DictConfig, OmegaConf
+
+from summer_clip.trainers_utils import log_utils
+
+
+class BaseTrainer:
+    def __init__(self, cfg: DictConfig):
+        self.cfg = cfg
+
+    def to(self, device):
+        self.model.to(device)
+
+    def train_mode(self):
+        self.model.train()
+
+    def eval_mode(self):
+        self.model.eval()
+
+    def setup_logger(self):
+        config_for_logger = OmegaConf.to_container(self.cfg)
+        config_for_logger["PID"] = os.getpid()
+        exp_logger = log_utils.WandbLogger(
+            project=self.cfg.exp.project,
+            name=self.cfg.exp.name,
+            dir=self.cfg.exp.root,
+            tags=tuple(self.cfg.exp.tags) if self.cfg.exp.tags else None,
+            notes=self.cfg.exp.notes,
+            config=config_for_logger,
+        )
+        self.run_dir = exp_logger.run_dir
+        console_logger = log_utils.ConsoleLogger(self.cfg.exp.name)
+        self.logger = log_utils.LoggingManager(exp_logger, console_logger)
+
+    def setup_dataset(self):
+        pass
+
+    def setup_loaders(self):
+        pass
+
+    def setup_model(self):
+        pass
+
+    def setup_optimizer(self):
+        pass
+
+    def setup_scheduler(self):
+        pass
+
+    def setup_loss(self):
+        pass
+
+    def setup(self):
+        self.setup_logger()
+        self.setup_dataset()
+        self.setup_loaders()
+        self.setup_model()
+        self.setup_optimizer()
+        self.setup_loss()
+
+    def compute_metrics(self, epoch_num, epoch_info):
+        pass
+
+    def train_epoch(self, epoch_num, epoch_info):
+        pass
+
+    def validation_epoch(self, epoch_num, epoch_info):
+        pass
+
+    def save_epoch_model(self, epoch_num):
+        pass
+
+    def scheduler_step(self):
+        if hasattr(self, 'scheduler') and self.scheduler is not None:
+            self.scheduler.step()
+
+    def train_loop(self):
+        training_time_log = log_utils.TimeLog(
+            self.logger, self.cfg.training.num_epochs + 1, event="training"
+        )
+        self.setup_scheduler()
+        for epoch_num in range(1, self.cfg.training.num_epochs + 1):
+            epoch_info = log_utils.StreamingMeans()
+            self.train_mode()
+            with log_utils.Timer(epoch_info, "epoch_train"):
+                epoch_info = self.train_epoch(epoch_num, epoch_info)
+
+            self.scheduler_step()
+
+            self.eval_mode()
+            with log_utils.Timer(epoch_info, "epoch_val"):
+                epoch_info = self.validation_epoch(epoch_num, epoch_info)
+
+            if epoch_num % self.cfg.log.calculate_every == 0:
+                self.compute_metrics(epoch_num, epoch_info)
+
+            self.logger.log_epoch(epoch_num, epoch_info)
+
+            self.save_epoch_model(epoch_num)
+
+            training_time_log.now(epoch_num)
+        training_time_log.end()

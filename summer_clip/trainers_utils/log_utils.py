@@ -62,14 +62,9 @@ class LoggingManager:
             epoch_num, iter_num, num_iters, iter_info, **kwargs
         )
 
-    def log_epoch(self, epoch_num, epoch_info, images):
+    def log_epoch(self, epoch_num, epoch_info):
         self.exp_logger.log(dict(epoch=epoch_num, **epoch_info.to_dict()))
         self.console_logger.log_epoch(epoch_num, epoch_info)
-
-        for name, imgs in images.items():
-            num_row = int(imgs.size(0) ** 0.5)
-            imgs = torchvision.utils.make_grid(imgs, nrow=num_row)
-            self.exp_logger.log_images(name, imgs, epoch_num)
 
     def log_info(self, output_info):
         self.console_logger.logger.info(output_info)
