@@ -14,7 +14,7 @@ from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
 
-from results_reproduce import train_adapter
+from summer_clip.clip_adapter import train_adapter
 
 
 def zeroshot_classifier(model, classnames, templates):
@@ -62,7 +62,7 @@ def eval_clip(model_name: str, dataset_cfg: DictConfig, classes: tp.Optional[tp.
     logging.info(f'acc@5: {top5}')
 
 
-@hydra.main(config_path='conf', config_name='eval_clip', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='eval_clip', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))

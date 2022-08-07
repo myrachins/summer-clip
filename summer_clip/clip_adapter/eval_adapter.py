@@ -8,8 +8,8 @@ import torch
 from torch.utils.data.dataloader import DataLoader
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
-from results_reproduce import eval_clip
-from results_reproduce import train_adapter
+from summer_clip.clip_model import eval_clip
+from summer_clip.clip_adapter import train_adapter
 
 
 def load_checkpoint_state(clip_adapter: train_adapter.ClipAdapter, checkpoint_path: str, device: str) -> train_adapter.ClipAdapter:
@@ -56,7 +56,7 @@ def load_train_config(eval_cfg: DictConfig) -> tp.Union[DictConfig, ListConfig]:
     return OmegaConf.load(train_config_path)
 
 
-@hydra.main(config_path='conf', config_name='eval_adapter', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='eval_adapter', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))

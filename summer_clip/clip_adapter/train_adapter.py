@@ -21,7 +21,7 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataset import random_split
 from torch.utils.data.dataloader import DataLoader
 
-from results_reproduce import eval_clip
+from summer_clip.clip_model import eval_clip
 
 
 class ClipAdapter(nn.Module):

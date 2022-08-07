@@ -4,7 +4,7 @@
 nvidia-smi
 date
 
-PY_PATH="/home/myurachinskiy/CLIP/summer-clip/results_reproduce/save_features.py"
+PY_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/clip_adapter/save_features.py"
 SUMMER_CLIP_PATH="/home/myurachinskiy/CLIP/summer-clip"
 
 export PYTHONPATH="${PYTHONPATH}:${SUMMER_CLIP_PATH}"

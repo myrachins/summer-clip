@@ -8,7 +8,7 @@ from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset
 from omegaconf import DictConfig, OmegaConf
 
-from results_reproduce import eval_clip
+from summer_clip.clip_model import eval_clip
 
 
 class IndexedDataset(Dataset):
@@ -50,7 +50,7 @@ def save_features(model_name: str, dataset_cfg: DictConfig, output_path: str, ba
     torch.save(images, output_path)
 
 
-@hydra.main(config_path='conf', config_name='save_features', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='save_features', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))
