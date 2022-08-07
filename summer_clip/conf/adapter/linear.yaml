@@ -1,1 +1,1 @@
-_target_: results_reproduce.train_adapter.LinearClipAdapterFabric
+_target_: summer_clip.clip_adapter.train_adapter.LinearClipAdapterFabric

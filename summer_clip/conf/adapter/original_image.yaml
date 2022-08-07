@@ -1,3 +1,3 @@
-_target_: results_reproduce.train_adapter.OriginalImageClipAdapterFabric
+_target_: summer_clip.clip_adapter.train_adapter.OriginalImageClipAdapterFabric
 dim_reduction: 4
 res_ratio: 0.2
