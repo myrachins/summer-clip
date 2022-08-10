@@ -20,6 +20,7 @@ from torch.utils.data.dataset import random_split
 from torch.utils.data.dataloader import DataLoader
 
 from summer_clip.clip_model import eval_clip
+from summer_clip.utils.trainer import BaseTrainer
 
 
 class ClipAdapter(nn.Module):
@@ -40,7 +41,7 @@ class ClipAdapter(nn.Module):
         return text
 
 
-class ClipAdapterTrainer(nn.Module):
+class CachedClipAdapter(nn.Module):
     def __init__(self, clip_adapter: ClipAdapter, image_features: torch.Tensor, text_features: torch.Tensor) -> None:
         super().__init__()
         self.clip_adapter = clip_adapter
@@ -128,36 +129,6 @@ class NoImageIndexedDataset(Dataset):
         return label, index
 
 
-def train_epoch(loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss, optimizer: torch.optim.Optimizer,
-                device: torch.device):
-    model.train()
-    model = model.to(device)
-    epoch_loss = 0.
-
-    for labels, indexes in tqdm(loader):
-        model.zero_grad()
-        indexes = indexes.to(device)
-        labels = labels.to(device)
-
-        logits_per_image, logits_per_text = model(indexes, labels)
-        dummy_labels = torch.arange(len(labels), device=device)
-        image_loss = loss(logits_per_image, dummy_labels)
-        text_loss = loss(logits_per_text, dummy_labels)
-        agg_loss = (image_loss + text_loss) / 2
-
-        wandb.log({
-            'loss-train-image': image_loss.item(),
-            'loss-train-text': text_loss.item(),
-            'loss-train-agg': agg_loss.item(),
-        })
-        epoch_loss += agg_loss.item()
-
-        agg_loss.backward()
-        optimizer.step()
-
-    return model, epoch_loss, optimizer
-
-
 def accuracy(output, target, topk=(1,)):
     pred = output.topk(max(topk), 1, True, True)[1].t()
     correct = pred.eq(target.view(1, -1).expand_as(pred))
@@ -191,7 +162,7 @@ def compute_accuracy(image_features, text_features, loader):
     return top1, top5
 
 
-def eval_model(loader: DataLoader, model: ClipAdapterTrainer) -> tp.Tuple[float, float]:
+def eval_model(loader: DataLoader, model: CachedClipAdapter) -> tp.Tuple[float, float]:
     model.eval()
     image_features = model.clip_adapter.vision_adapter(model.image_features.t()).t()
     text_features = model.clip_adapter.text_adapter(model.text_features.t()).t()
@@ -215,78 +186,98 @@ def save_epoch_model(model: ClipAdapter, optimizer: torch.optim.Optimizer, epoch
     save_data(optimizer.state_dict(), 'optimizer')
 
 
-def train_model(train_loader: DataLoader, val_loader: DataLoader, model: ClipAdapterTrainer, loss: nn.CrossEntropyLoss,
-                optimizer: torch.optim.Optimizer, device: torch.device, epochs_num: int, checkpoints_dir: Path):
-    for epoch_num in range(1, epochs_num + 1):
-        print(f'Running epoch {epoch_num}...')
-        model, epoch_loss, optimizer = train_epoch(train_loader, model, loss, optimizer, device)
-        print('Evaluating model on train...')
-        eval_top1, eval_top5 = eval_model(train_loader, model)
-        wandb.log({
-            'train-epoch-sum-loss': epoch_loss,
-            'train-epoch-acc@1': eval_top1,
-            'train-epoch-acc@5': eval_top5,
-        })
-        logging.info(f'{epoch_num=}, train-acc@1: {eval_top1}')
-        logging.info(f'{epoch_num=}, train-acc@5: {eval_top5}')
-        print('Evaluating model on validation...')
-        eval_top1, eval_top5 = eval_model(val_loader, model)
-        wandb.log({
-            'val-epoch-acc@1': eval_top1,
-            'val-epoch-acc@5': eval_top5,
-        })
-        logging.info(f'{epoch_num=}, val-acc@1: {eval_top1}')
-        logging.info(f'{epoch_num=}, val-acc@5: {eval_top5}')
-        print(f'Saving checkpoint after {epoch_num} epoch...')
-        save_epoch_model(model.clip_adapter, optimizer, epoch_num, checkpoints_dir)
-
-
 def train_val_split(dataset, validation_size: float):
     val_size = int(len(dataset) * validation_size)
     train_size = len(dataset) - val_size
     return random_split(dataset, [train_size, val_size])
 
 
-def train_adapter(model_name: str, dataset_cfg: DictConfig, validation_size: float, batch_size: int, num_workers: int,
-                  adapter_fabric: ClipAdapterFabric, classes: tp.Optional[tp.List[str]], templates: tp.List[str],
-                  image_features_path: str, adam_params: tp.Dict[str, tp.Any], epochs_num: int,
-                  checkpoints_dir: str, device: str, random_state: int) -> None:
-    eval_clip.set_random_state(random_state)
-    torch_device = torch.device(device)
-    checkpoints_path = Path(checkpoints_dir)
+class ClipAdapterTrainer(BaseTrainer):
+    def setup_dataset(self):
+        self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
+        self.dataset = NoImageIndexedDataset(self.source_dataset)
 
-    clip_model, _ = clip.load(model_name, device, jit=False)
-    dataset = hydra.utils.instantiate(dataset_cfg)
-    indexed_dataset = NoImageIndexedDataset(dataset)
-    train_dataset, val_dataset = train_val_split(indexed_dataset, validation_size)
-    logging.info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
+    def setup_loaders(self):
+        train_dataset, val_dataset = train_val_split(self.dataset, self.cfg.data.validation_size)
+        self.logger.log_info(f'train-size={len(train_dataset)}, val-size={len(val_dataset)}')
+        batch_size = self.cfg.data.batch_size
+        num_workers = self.cfg.data.num_workers
+        self.loaders = {
+            'train': DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers),
+            'val': DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
+        }
 
-    clip_adapter = adapter_fabric.create_adapter(clip_model)
-    clip_classes = classes or dataset.classes
-    text_features = eval_clip.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
-    image_features = torch.load(image_features_path)
-    clip_adapter_trainer = ClipAdapterTrainer(clip_adapter, image_features, text_features)
+    def setup_loss(self):
+        self.loss = nn.CrossEntropyLoss()
 
-    loss = nn.CrossEntropyLoss()
-    parameters = (clip_adapter.vision_adapter.parameters(), clip_adapter.text_adapter.parameters())
-    optimizer = torch.optim.Adam(itertools.chain(*parameters), **adam_params)
+    def setup_optimizer(self):
+        clip_adapter = self.model.clip_adapter
+        parameters = (clip_adapter.vision_adapter.parameters(), clip_adapter.text_adapter.parameters())
+        self.optimizer = torch.optim.Adam(itertools.chain(*parameters), **self.cfg.training.adam_params)
 
-    train_model(train_loader, val_loader, clip_adapter_trainer, loss, optimizer, torch_device, epochs_num, checkpoints_path)
+    def setup_model(self):
+        clip_model, _ = clip.load(self.cfg.clip.model_name, self.cfg.meta.device, jit=False)
+        adapter_fabric = hydra.utils.instantiate(self.cfg.adapter)
+        clip_adapter = adapter_fabric.create_adapter(clip_model)
+        clip_classes = self.cfg.prompting.classes or self.source_dataset.classes
+        text_features = eval_clip.zeroshot_classifier(clip_adapter.clip_model, clip_classes, self.cfg.prompting.templates)
+        image_features = torch.load(self.cfg.data.image_features_path)
+        self.model = CachedClipAdapter(clip_adapter, image_features, text_features)
+
+    def train_epoch(self, epoch_num, epoch_info):
+        print(f'Running epoch {epoch_num}...')
+        device = self.cfg.meta.device
+        model = self.model.to(device)
+        epoch_loss = 0.
+
+        for labels, indexes in tqdm(self.loaders['train']):
+            model.zero_grad()
+            indexes = indexes.to(device)
+            labels = labels.to(device)
+
+            logits_per_image, logits_per_text = model(indexes, labels)
+            dummy_labels = torch.arange(len(labels), device=device)
+            image_loss = self.loss(logits_per_image, dummy_labels)
+            text_loss = self.loss(logits_per_text, dummy_labels)
+            agg_loss = (image_loss + text_loss) / 2
+
+            self.logger.exp_logger.log({
+                'loss/train-image': image_loss.item(),
+                'loss/train-text': text_loss.item(),
+                'loss/train-agg': agg_loss.item(),
+            })
+            epoch_loss += agg_loss.item()
+
+            agg_loss.backward()
+            self.optimizer.step()
+
+        epoch_info['loss/sum-loss'] = epoch_loss
+        return epoch_info
+
+    def compute_metrics(self, epoch_num, epoch_info):
+        print('Evaluating model on train...')
+        eval_top1, eval_top5 = eval_model(self.loaders['train'], self.model)
+        epoch_info['metrics/train-acc@1'] = eval_top1
+        epoch_info['metrics/train-acc@5'] = eval_top5
+        print('Evaluating model on validation...')
+        eval_top1, eval_top5 = eval_model(self.loaders['val'], self.model)
+        epoch_info['metrics/val-acc@1'] = eval_top1
+        epoch_info['metrics/val-acc@5'] = eval_top5
+
+    def save_epoch_model(self, epoch_num):
+        save_epoch_model(self.model.clip_adapter, self.optimizer, epoch_num, Path(self.cfg.data.checkpoints_dir))
 
 
-@hydra.main(config_path='conf', config_name='train_adapter', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='train_adapter', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     logging.info('Start!')
     print(OmegaConf.to_yaml(cfg))
-    wandb.init(project='train_adapter', config=tp.cast(dict, OmegaConf.to_container(cfg)))
-    adapter_fabric = hydra.utils.instantiate(cfg.adapter)
-    train_adapter(
-        cfg.clip.model_name, cfg.dataset, cfg.data.validation_size, cfg.data.batch_size,
-        cfg.data.num_workers, adapter_fabric, cfg.prompting.classes, cfg.prompting.templates, cfg.data.image_features_path,
-        cfg.training.adam_params, cfg.training.epochs_num, cfg.data.checkpoints_dir, cfg.meta.device, cfg.meta.random_state
-    )
+
+    eval_clip.set_random_state(cfg.meta.random_state)
+    trainer = ClipAdapterTrainer(cfg)
+    trainer.setup()
+    trainer.train_loop()
+
     logging.info('Finish!')
 
 

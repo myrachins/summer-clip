@@ -41,7 +41,7 @@ def eval_adapter(checkpoint_path: str, visual_encoder_name: str, adapter_fabric:
     clip_classes = classes or dataset.classes
     text_features = eval_clip.zeroshot_classifier(clip_adapter.clip_model, clip_classes, templates)
     image_features = torch.load(image_features_path)
-    clip_adapter_trainer = train_adapter.ClipAdapterTrainer(clip_adapter, image_features, text_features)
+    clip_adapter_trainer = train_adapter.CachedClipAdapter(clip_adapter, image_features, text_features)
 
     top1, top5 = train_adapter.eval_model(loader, clip_adapter_trainer)
     logging.info(f'acc@1: {top1}')

@@ -1,18 +1,12 @@
 import copy
 import time
 import datetime
-import datasets
 import collections
 import torch
-import torchvision
-import numpy as np
 import logging
 import os
 import glob
-import utils
-import heapq
 import wandb
-import matplotlib.pyplot as plt
 from ptflops import get_model_complexity_info
 
 
@@ -395,59 +389,59 @@ def remove_checkpoint(checkpoint_dir, epoch_num, nets, optims, remove_full):
             os.remove(fn)
 
 
-class DiscriminatorLogging:
-    def __init__(self, logger, conditional=False):
-        self.tough_samples = collections.defaultdict(list)
-        self.logger = logger
-        self.conditional = conditional
+# class DiscriminatorLogging:
+#     def __init__(self, logger, conditional=False):
+#         self.tough_samples = collections.defaultdict(list)
+#         self.logger = logger
+#         self.conditional = conditional
 
-    def log_disc(
-        self,
-        iter_info,
-        logits_real,
-        logits_fake,
-        x_real,
-        x_fake,
-        log_event,
-        num_tough_samples=5,
-    ):
-        x_real = x_real[0] if self.conditional else x_real
-        x_fake = x_fake[0] if self.conditional else x_fake
-        iter_info.update(
-            {
-                f"disc_log_{log_event}/real_mean": logits_real.mean(),
-                f"disc_log_{log_event}/real_med": logits_real.median(),
-                f"disc_log_{log_event}/acc_real": utils.accuracy(
-                    real_logits=logits_real
-                ),
-                f"disc_log_{log_event}/fake_mean": logits_fake.mean(),
-                f"disc_log_{log_event}/fake_med": logits_fake.median(),
-                f"disc_log_{log_event}/acc_fake": utils.accuracy(
-                    fake_logits=logits_fake
-                ),
-            }
-        )
-        real_key = f"disc_tough_samples/{log_event}/real"
-        self.tough_samples[real_key] = heapq.nsmallest(
-            num_tough_samples,
-            list(
-                zip(logits_real.view(logits_real.size(0), -1).mean(1), x_real)
-            )
-            + self.tough_samples[real_key],
-            key=lambda t: t[0],
-        )
-        fake_key = f"disc_tough_samples/{log_event}/fake"
-        self.tough_samples[fake_key] = heapq.nlargest(
-            num_tough_samples,
-            list(
-                zip(logits_fake.view(logits_fake.size(0), -1).mean(1), x_fake)
-            )
-            + self.tough_samples[fake_key],
-            key=lambda t: t[0],
-        )
+#     def log_disc(
+#         self,
+#         iter_info,
+#         logits_real,
+#         logits_fake,
+#         x_real,
+#         x_fake,
+#         log_event,
+#         num_tough_samples=5,
+#     ):
+#         x_real = x_real[0] if self.conditional else x_real
+#         x_fake = x_fake[0] if self.conditional else x_fake
+#         iter_info.update(
+#             {
+#                 f"disc_log_{log_event}/real_mean": logits_real.mean(),
+#                 f"disc_log_{log_event}/real_med": logits_real.median(),
+#                 f"disc_log_{log_event}/acc_real": utils.accuracy(
+#                     real_logits=logits_real
+#                 ),
+#                 f"disc_log_{log_event}/fake_mean": logits_fake.mean(),
+#                 f"disc_log_{log_event}/fake_med": logits_fake.median(),
+#                 f"disc_log_{log_event}/acc_fake": utils.accuracy(
+#                     fake_logits=logits_fake
+#                 ),
+#             }
+#         )
+#         real_key = f"disc_tough_samples/{log_event}/real"
+#         self.tough_samples[real_key] = heapq.nsmallest(
+#             num_tough_samples,
+#             list(
+#                 zip(logits_real.view(logits_real.size(0), -1).mean(1), x_real)
+#             )
+#             + self.tough_samples[real_key],
+#             key=lambda t: t[0],
+#         )
+#         fake_key = f"disc_tough_samples/{log_event}/fake"
+#         self.tough_samples[fake_key] = heapq.nlargest(
+#             num_tough_samples,
+#             list(
+#                 zip(logits_fake.view(logits_fake.size(0), -1).mean(1), x_fake)
+#             )
+#             + self.tough_samples[fake_key],
+#             key=lambda t: t[0],
+#         )
 
-    def log_tough_samples(self, epoch_num):
-        for name, samples in self.tough_samples.items():
-            for i, (logit, x) in enumerate(samples):
-                caption = f"epoch = {epoch_num}, logit = {logit:.3f}"
-                wandb.log({f"{name}_{i}": wandb.Image(x, caption=caption)})
+#     def log_tough_samples(self, epoch_num):
+#         for name, samples in self.tough_samples.items():
+#             for i, (logit, x) in enumerate(samples):
+#                 caption = f"epoch = {epoch_num}, logit = {logit:.3f}"
+#                 wandb.log({f"{name}_{i}": wandb.Image(x, caption=caption)})

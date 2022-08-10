@@ -23,9 +23,9 @@ class BaseTrainer:
         exp_logger = log_utils.WandbLogger(
             project=self.cfg.exp.project,
             name=self.cfg.exp.name,
-            dir=self.cfg.exp.root,
-            tags=tuple(self.cfg.exp.tags) if self.cfg.exp.tags else None,
-            notes=self.cfg.exp.notes,
+            # dir=self.cfg.exp.root,
+            # tags=tuple(self.cfg.exp.tags) if self.cfg.exp.tags else None,
+            # notes=self.cfg.exp.notes,
             config=config_for_logger,
         )
         self.run_dir = exp_logger.run_dir
@@ -62,10 +62,10 @@ class BaseTrainer:
         pass
 
     def train_epoch(self, epoch_num, epoch_info):
-        pass
+        return epoch_info
 
     def validation_epoch(self, epoch_num, epoch_info):
-        pass
+        return epoch_info
 
     def save_epoch_model(self, epoch_num):
         pass
@@ -76,10 +76,10 @@ class BaseTrainer:
 
     def train_loop(self):
         training_time_log = log_utils.TimeLog(
-            self.logger, self.cfg.training.num_epochs + 1, event="training"
+            self.logger, self.cfg.training.epochs_num + 1, event="training"
         )
         self.setup_scheduler()
-        for epoch_num in range(1, self.cfg.training.num_epochs + 1):
+        for epoch_num in range(1, self.cfg.training.epochs_num + 1):
             epoch_info = log_utils.StreamingMeans()
             self.train_mode()
             with log_utils.Timer(epoch_info, "epoch_train"):
