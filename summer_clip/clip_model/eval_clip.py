@@ -1,5 +1,3 @@
-import os
-import random
 import logging
 import typing as tp
 
@@ -9,12 +7,12 @@ import torch
 import torch.cuda
 import torch.backends.cudnn
 import torch.utils
-import numpy as np
 from tqdm import tqdm
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
 
 from summer_clip.clip_adapter import train_adapter
+from summer_clip.utils.trainer import set_random_state
 
 
 def zeroshot_classifier(model, classnames, templates):
@@ -30,18 +28,6 @@ def zeroshot_classifier(model, classnames, templates):
             zeroshot_weights.append(class_embedding)
         zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
     return zeroshot_weights
-
-
-def set_random_state(random_state: int):
-    os.environ['PYTHONHASHSEED'] = str(random_state)
-    random.seed(random_state)
-    np.random.seed(random_state)
-
-    torch.manual_seed(random_state)
-    torch.cuda.manual_seed(random_state)
-    torch.cuda.manual_seed_all(random_state)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
 
 
 def eval_clip(model_name: str, dataset_cfg: DictConfig, classes: tp.Optional[tp.List[str]], templates: tp.List[str],

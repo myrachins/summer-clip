@@ -1,0 +1,30 @@
+prompting:
+  templates:
+  - a photo of a {}.
+  classes: null
+meta:
+  device: cuda
+  random_state: 42
+path:
+  cache_dir: /home/myurachinskiy/.cache
+root_path: ${path.cache_dir}/ImageNet
+load_cache: false
+load_pre_feat: false
+search_hp: true
+search_scale:
+- 7
+- 3
+search_step:
+- 200
+- 20
+init_beta: 1
+init_alpha: 1.17
+dataset: imagenet
+shots: 16
+backbone: RN50
+lr: 0.001
+augment_epoch: 10
+train_epoch: 20
+exp:
+  project: tip_adapter
+  name: initial_tip_imagenet

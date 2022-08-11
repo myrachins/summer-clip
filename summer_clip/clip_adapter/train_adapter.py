@@ -21,6 +21,7 @@ from torch.utils.data.dataloader import DataLoader
 
 from summer_clip.clip_model import eval_clip
 from summer_clip.utils.trainer import BaseTrainer
+from summer_clip.utils.trainer import run_trainer
 
 
 class ClipAdapter(nn.Module):
@@ -270,15 +271,7 @@ class ClipAdapterTrainer(BaseTrainer):
 
 @hydra.main(config_path='../conf', config_name='train_adapter', version_base='1.1')
 def run(cfg: DictConfig) -> None:
-    logging.info('Start!')
-    print(OmegaConf.to_yaml(cfg))
-
-    eval_clip.set_random_state(cfg.meta.random_state)
-    trainer = ClipAdapterTrainer(cfg)
-    trainer.setup()
-    trainer.train_loop()
-
-    logging.info('Finish!')
+    run_trainer(ClipAdapterTrainer, cfg)
 
 
 if __name__ == '__main__':

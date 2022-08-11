@@ -1,4 +1,10 @@
 import os
+import random
+
+import torch
+import torch.cuda
+import torch.backends.cudnn
+import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
 from summer_clip.trainers_utils import log_utils
@@ -100,3 +106,24 @@ class BaseTrainer:
 
             training_time_log.now(epoch_num)
         training_time_log.end()
+
+
+def set_random_state(random_state: int):
+    os.environ['PYTHONHASHSEED'] = str(random_state)
+    random.seed(random_state)
+    np.random.seed(random_state)
+
+    torch.manual_seed(random_state)
+    torch.cuda.manual_seed(random_state)
+    torch.cuda.manual_seed_all(random_state)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+
+def run_trainer(trainer_cls: type, cfg: DictConfig) -> None:
+    print(OmegaConf.to_yaml(cfg))
+    set_random_state(cfg.meta.random_state)
+
+    trainer = trainer_cls(cfg)
+    trainer.setup()
+    trainer.train_loop()
