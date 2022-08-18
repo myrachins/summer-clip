@@ -2,18 +2,18 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: cifar10_test
+  - dataset: imagenet_val_no_image
   - cache_strategy: threshold
 
 clip:
   model_name: ViT-B/16
 
 data:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-50-52/image_features.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-26-57/image_features.pt
 
 cache:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-44-05/image_features.pt
-  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-17/23-20-32/image_outs.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
+  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/10-53-59/image_outs.pt
   alpha: 1
   beta: 5.5
 

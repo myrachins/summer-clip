@@ -80,7 +80,7 @@ class SaveImageOuts(BaseTrainer):
         beta, alpha = self.cfg.cache.beta, self.cfg.cache.alpha
 
         affinity = self.test_image_features.t() @ self.cache_image_features
-        cache_values = F.softmax(self.cache_image_outs)
+        cache_values = F.softmax(self.cache_image_outs, dim=1)
         cache_logits = (-1 * beta * (1 - affinity)).exp() @ cache_values
 
         searcher_logits = clip_logits + cache_logits * alpha
