@@ -1,2 +1,2 @@
 _target_: summer_clip.clip_searcher.image_attention.TopKStrategy
-topk: 128
+topk: 16

@@ -96,13 +96,11 @@ class ImageAttention(BaseTrainer):
         self.test_image_features = torch.load(self.cfg.data.image_features_path).to(device)
         self.test_image_features /= self.test_image_features.norm(dim=0, keepdim=True)
 
-        cache_image_features = torch.load(self.cfg.cache.image_features_path)
-        cache_image_outs = torch.load(self.cfg.cache.image_outs_path)
+        cache_image_features = torch.load(self.cfg.cache.image_features_path).to(device)
+        cache_image_outs = torch.load(self.cfg.cache.image_outs_path).to(device)
         self.logger.log_info(f'original-data-size: {cache_image_outs.shape[0]}')
         cache_strategy: CacheStrategy = hydra.utils.instantiate(self.cfg.cache_strategy)
         self.cache_image_features, self.cache_image_outs = cache_strategy.transform(cache_image_features, cache_image_outs)
-        self.cache_image_features.to(device)
-        self.cache_image_outs.to(device)
         self.cache_image_features /= self.cache_image_features.norm(dim=0, keepdim=True)
         self.logger.log_info(f'cache-size: {self.cache_image_outs.shape[0]}')
 

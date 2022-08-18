@@ -1,0 +1,12 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - _self_
+  - dataset: imagenet_train_no_image
+
+data:
+  output_image_labels: image_labels.pt
+
+exp:
+  project: clip_searcher
+  name: save_image_labels

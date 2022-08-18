@@ -23,13 +23,13 @@ search_scale: [7, 3]
 search_step: [200, 20]
 
 init_beta: 5.5
-init_alpha: 1
+init_alpha: 1.0
 
 
 # ------ Basic Config ------
 dataset: 'imagenet'
 shots: 16
-backbone: 'RN50'
+backbone: 'ViT-B/16'
 
 lr: 0.001
 augment_epoch: 1
