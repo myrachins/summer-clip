@@ -76,7 +76,7 @@ def compute_accuracy(outputs, target):
     return transform_acc(acc1), transform_acc(acc5)
 
 
-class SaveImageOuts(BaseTrainer):
+class ImageAttention(BaseTrainer):
     def setup_dataset(self):
         self.dataset = hydra.utils.instantiate(self.cfg.dataset)
         test_labels = [label for _, label in self.dataset]
@@ -123,7 +123,7 @@ class SaveImageOuts(BaseTrainer):
 
 @hydra.main(config_path='../conf', config_name='image_attention', version_base='1.1')
 def run(cfg: DictConfig) -> None:
-    run_trainer(SaveImageOuts, cfg)
+    run_trainer(ImageAttention, cfg)
 
 
 if __name__ == '__main__':
