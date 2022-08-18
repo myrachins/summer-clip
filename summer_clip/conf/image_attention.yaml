@@ -1,0 +1,22 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - _self_
+  - dataset: cifar10_test
+  - cache_strategy: threshold
+
+clip:
+  model_name: ViT-B/16
+
+data:
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-50-52/image_features.pt
+
+cache:
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-44-05/image_features.pt
+  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-17/23-20-32/image_outs.pt
+  alpha: 1
+  beta: 5.5
+
+exp:
+  project: clip_searcher
+  name: image_attention

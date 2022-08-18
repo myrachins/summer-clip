@@ -1,0 +1,16 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - _self_
+  - dataset: cifar10_train
+
+clip:
+  model_name: ViT-B/16
+
+data:
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-44-05/image_features.pt
+  output_image_outs: image_outs.pt
+
+exp:
+  project: clip_searcher
+  name: save_image_outs

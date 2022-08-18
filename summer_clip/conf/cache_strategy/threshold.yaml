@@ -1,0 +1,3 @@
+_target_: summer_clip.clip_searcher.image_attention.ThresholdStrategy
+use_softmax: true
+threshold: 0.2

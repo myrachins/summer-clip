@@ -22,8 +22,8 @@ search_hp: True
 search_scale: [7, 3]
 search_step: [200, 20]
 
-init_beta: 1
-init_alpha: 1.17
+init_beta: 5.5
+init_alpha: 1
 
 
 # ------ Basic Config ------
@@ -32,7 +32,7 @@ shots: 16
 backbone: 'RN50'
 
 lr: 0.001
-augment_epoch: 10
+augment_epoch: 1
 train_epoch: 20
 
 exp:

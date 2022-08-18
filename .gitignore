@@ -60,5 +60,5 @@ Thumbs.db
 data/
 scripts/outs/
 outputs/*/*/*
-!outputs/*/*/*.log
-!outputs/*/*/.hydra
+# !outputs/*/*/*.log
+# !outputs/*/*/.hydra
