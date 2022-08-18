@@ -41,6 +41,30 @@ class ThresholdStrategy(CacheStrategy):
         return image_features[:, confidence_mask], image_outs[confidence_mask]
 
 
+class TopKStrategy(CacheStrategy):
+    def __init__(self, topk: int) -> None:
+        super().__init__()
+        self.topk = topk
+
+    def transform(self, image_features: torch.Tensor, image_outs: torch.Tensor) \
+            -> tp.Tuple[torch.Tensor, torch.Tensor]:
+        pred_outs, label_preds = image_outs.max(dim=1)
+        unique_labels = label_preds.unique()
+        print(f'Unique pred labels: {len(unique_labels)}')
+        labels_image_features, labels_image_outs = [], []
+
+        for label in unique_labels:
+            label_mask = (label_preds == label)
+            label_image_features = image_features[:, label_mask]
+            label_image_outs = image_outs[label_mask]
+            label_pred_outs = pred_outs[label_mask]
+            _, top_samples_inds = label_pred_outs.topk(self.topk)
+            labels_image_features.append(label_image_features[:, top_samples_inds])
+            labels_image_outs.append(label_image_outs[top_samples_inds])
+
+        return torch.cat(labels_image_features, dim=1), torch.cat(labels_image_outs, dim=0)
+
+
 def compute_accuracy(outputs, target):
     acc1, acc5 = train_adapter.accuracy(outputs, target, topk=(1, 5))
 

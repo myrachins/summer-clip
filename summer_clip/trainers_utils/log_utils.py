@@ -98,7 +98,7 @@ class ConsoleLogger:
         console_handler.setFormatter(log_formatter)
         self.logger.addHandler(console_handler)
 
-        self.logger.propagate = False
+        # self.logger.propagate = False
 
     @staticmethod
     def format_info(info):
