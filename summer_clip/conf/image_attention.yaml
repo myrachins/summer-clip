@@ -2,20 +2,21 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: imagenet_val_no_image
+  - dataset: eurosat
+  - prompting: tip_eurosat
   - cache_strategy: topk
 
 clip:
   model_name: ViT-B/16
 
 data:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-26-57/image_features.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/15-42-53/image_features.pt
 
 cache:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
-  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/13-21-10/image_outs.pt
-  alpha: [1, 0.5, 0.1, 0.01]
-  beta: [5.5, 1]
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/15-42-53/image_features.pt
+  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/15-49-01/image_outs.pt
+  alpha: [1, 0.5, 0.1, 0.01, 0.005]
+  beta: [10, 5.5, 1]
 
 exp:
   project: clip_searcher
