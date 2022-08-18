@@ -18,6 +18,7 @@ class SaveImageOuts(BaseTrainer):
         clip_classes = self.cfg.prompting.classes or self.dataset.classes
         self.text_features = eval_clip.zeroshot_classifier(clip_model, clip_classes, self.cfg.prompting.templates).to(device)
         self.image_features = torch.load(self.cfg.data.image_features_path).to(device)
+        self.image_features /= self.image_features.norm(dim=0, keepdim=True)
 
     def train_loop(self):
         print('Computing outputs...')

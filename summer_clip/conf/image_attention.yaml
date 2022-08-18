@@ -13,9 +13,9 @@ data:
 
 cache:
   image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
-  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/10-53-59/image_outs.pt
-  alpha: 0.5
-  beta: 5.5
+  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/13-21-10/image_outs.pt
+  alpha: [1, 0.5, 0.1, 0.01]
+  beta: [5.5, 1]
 
 exp:
   project: clip_searcher

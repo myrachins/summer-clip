@@ -1,3 +1,4 @@
+import itertools
 import typing as tp
 from abc import ABC, abstractmethod
 
@@ -58,7 +59,8 @@ class TopKStrategy(CacheStrategy):
             label_image_features = image_features[:, label_mask]
             label_image_outs = image_outs[label_mask]
             label_pred_outs = pred_outs[label_mask]
-            _, top_samples_inds = label_pred_outs.topk(self.topk)
+            topk = min(self.topk, label_pred_outs.shape[0])
+            _, top_samples_inds = label_pred_outs.topk(topk)
             labels_image_features.append(label_image_features[:, top_samples_inds])
             labels_image_outs.append(label_image_outs[top_samples_inds])
 
@@ -80,20 +82,27 @@ class SaveImageOuts(BaseTrainer):
         test_labels = [label for _, label in self.dataset]
         self.test_labels = torch.IntTensor(test_labels).to(self.cfg.meta.device)
 
-    def setup_model(self):
-        device = torch.device(self.cfg.meta.device)
+    def load_test_text_features(self, device: torch.device):
         clip_model, _ = clip.load(self.cfg.clip.model_name, device, jit=False)
         clip_classes = self.cfg.prompting.classes or self.dataset.classes
 
-        self.test_text_features = eval_clip.zeroshot_classifier(clip_model, clip_classes, self.cfg.prompting.templates).to(device)
+        test_text_features = eval_clip.zeroshot_classifier(clip_model, clip_classes, self.cfg.prompting.templates)
+        return test_text_features.to(device)
+
+    def setup_model(self):
+        device = torch.device(self.cfg.meta.device)
+
+        self.test_text_features = self.load_test_text_features(device)
         self.test_image_features = torch.load(self.cfg.data.image_features_path).to(device)
         self.test_image_features /= self.test_image_features.norm(dim=0, keepdim=True)
 
-        cache_image_features = torch.load(self.cfg.cache.image_features_path).to(device)
-        cache_image_outs = torch.load(self.cfg.cache.image_outs_path).to(device)
+        cache_image_features = torch.load(self.cfg.cache.image_features_path)
+        cache_image_outs = torch.load(self.cfg.cache.image_outs_path)
         self.logger.log_info(f'original-data-size: {cache_image_outs.shape[0]}')
         cache_strategy: CacheStrategy = hydra.utils.instantiate(self.cfg.cache_strategy)
         self.cache_image_features, self.cache_image_outs = cache_strategy.transform(cache_image_features, cache_image_outs)
+        self.cache_image_features.to(device)
+        self.cache_image_outs.to(device)
         self.cache_image_features /= self.cache_image_features.norm(dim=0, keepdim=True)
         self.logger.log_info(f'cache-size: {self.cache_image_outs.shape[0]}')
 
@@ -101,15 +110,15 @@ class SaveImageOuts(BaseTrainer):
         clip_logits = 100. * self.test_image_features.t() @ self.test_text_features
         eval_top1, eval_top5 = compute_accuracy(clip_logits, self.test_labels)
         self.logger.log_info(f'zero-shot clip: acc@1={eval_top1}, acc@5={eval_top5}')
-        beta, alpha = self.cfg.cache.beta, self.cfg.cache.alpha
 
-        affinity = self.test_image_features.t() @ self.cache_image_features
+        cache_weights = self.test_image_features.t() @ self.cache_image_features
         cache_values = F.softmax(self.cache_image_outs, dim=1)
-        cache_logits = (-1 * beta * (1 - affinity)).exp() @ cache_values
 
-        searcher_logits = clip_logits + cache_logits * alpha
-        eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
-        self.logger.log_info(f'clip-searcher: acc@1={eval_top1}, acc@5={eval_top5}')
+        for beta, alpha in itertools.product(self.cfg.cache.beta, self.cfg.cache.alpha):
+            cache_logits = (-1 * beta * (1 - cache_weights)).exp() @ cache_values
+            searcher_logits = clip_logits + cache_logits * alpha
+            eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
+            self.logger.log_info(f'clip-searcher ({beta=}, {alpha=}): acc@1={eval_top1}, acc@5={eval_top5}')
 
 
 @hydra.main(config_path='../conf', config_name='image_attention', version_base='1.1')
