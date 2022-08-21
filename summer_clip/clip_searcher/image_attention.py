@@ -110,7 +110,7 @@ class ImageAttention(BaseTrainer):
         self.logger.log_info(f'zero-shot clip: acc@1={eval_top1}, acc@5={eval_top5}')
 
         cache_weights = self.test_image_features.t() @ self.cache_image_features
-        cache_values = F.softmax(self.cache_image_outs, dim=1)
+        cache_values = F.softmax(100. * self.cache_image_outs, dim=1)
 
         for beta, alpha in itertools.product(self.cfg.cache.beta, self.cfg.cache.alpha):
             cache_logits = (-1 * beta * (1 - cache_weights)).exp() @ cache_values
