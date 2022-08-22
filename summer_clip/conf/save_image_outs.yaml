@@ -2,14 +2,14 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: eurosat
-  - prompting: tip_eurosat
+  - dataset: imagenet_train_no_image
+  - prompting: tip_imagenet
 
 clip:
   model_name: RN50
 
 data:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/16-39-01/image_features.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-21/18-35-13/image_features.pt
   output_image_outs: image_outs.pt
 
 exp:
