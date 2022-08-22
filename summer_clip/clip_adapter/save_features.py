@@ -29,7 +29,7 @@ def calculate_image_features(model, loader, device):
     images, indexes = [], []
     for image, _, index in tqdm(loader):
         image = image.to(device)
-        image_vectors = model.encode_image(image)
+        image_vectors = model.encode_image(image).cpu()
         images.extend(image_vectors)
         indexes.extend(index.tolist())
     images = torch.stack(images, dim=1)
