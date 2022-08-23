@@ -3,20 +3,21 @@ defaults:
   - adapter_setup
   - _self_
   - dataset: imagenet_val_no_image
+  - dataset@cache.dataset: imagenet_train_no_image
   - prompting: tip_imagenet
   - cache_strategy: topk
 
 clip:
-  model_name: ViT-B/16
+  model_name: RN50
 
 data:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-26-57/image_features.pt
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/19-55-09/image_features.pt
 
 cache:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
-  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/18-56-12/image_labels.pt
-  alpha: [1.0]
-  beta: [5.5]
+  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-21/18-35-13/image_features.pt
+  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/22-01-02/image_outs.pt
+  alpha: [0, 1.0]
+  beta: [0, 5.5]
 
 exp:
   project: clip_searcher
