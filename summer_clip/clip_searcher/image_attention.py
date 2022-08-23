@@ -67,7 +67,8 @@ class TopKStrategy(IndexedCacheStrategy):
             label_pred_outs = pred_outs[label_mask]
             topk = min(self.topk, label_pred_outs.shape[0])
             _, top_samples_inds = label_pred_outs.topk(topk)
-            samples_ids.append(top_samples_inds)
+            global_top_samples_inds = label_mask.nonzero().squeeze()[top_samples_inds]
+            samples_ids.append(global_top_samples_inds)
 
         return torch.cat(samples_ids)
 
