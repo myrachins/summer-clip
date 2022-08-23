@@ -1,0 +1,3 @@
+_target_: summer_clip.clip_searcher.image_attention.PerGoldClassRandomSampleStrategy
+topk: 16
+cache_dataset: ${cache.dataset}

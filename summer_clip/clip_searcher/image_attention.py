@@ -5,9 +5,11 @@ from abc import ABC, abstractmethod
 import clip
 import hydra
 import torch
+import numpy as np
 import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch.utils.data.dataloader import DataLoader
+from torch.utils.data.dataset import Dataset
 
 from summer_clip.clip_model import eval_clip
 from summer_clip.clip_adapter import train_adapter
@@ -73,6 +75,62 @@ class TopKStrategy(IndexedCacheStrategy):
         return torch.cat(samples_ids)
 
 
+class GlobalRandomSampleStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int) -> None:
+        super().__init__()
+        self.topk = topk
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        samples_num = self.topk * image_outs.shape[1]
+        samples_ids = np.random.choice(image_outs.shape[0], size=samples_num, replace=False)
+        return torch.LongTensor(samples_ids).to(image_outs.device)
+
+
+def load_labels(dataset: Dataset) -> torch.Tensor:
+    labels = [label for _, label in dataset]  # type: ignore
+    return torch.IntTensor(labels)
+
+
+class PerGoldClassRandomSampleStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int, cache_dataset: Dataset) -> None:
+        super().__init__()
+        self.topk = topk
+        self.cache_labels = load_labels(cache_dataset)
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        samples_ids = []
+
+        for label in self.cache_labels.unique():
+            label_inds = (self.cache_labels == label).nonzero().squeeze()
+            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=self.topk, replace=False)
+            label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
+            global_top_samples_inds = label_inds[label_samples_inds]
+            samples_ids.append(global_top_samples_inds)
+
+        return torch.cat(samples_ids)
+
+
+class PerPredClassRandomSampleStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int) -> None:
+        super().__init__()
+        self.topk = topk
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        _, label_preds = image_outs.max(dim=1)
+        unique_labels = label_preds.unique()
+        print(f'Unique pred labels: {len(unique_labels)}')
+        samples_ids = []
+
+        for label in unique_labels:
+            label_inds = (label_preds == label).nonzero().squeeze()
+            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=self.topk, replace=False)
+            label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
+            global_top_samples_inds = label_inds[label_samples_inds]
+            samples_ids.append(global_top_samples_inds)
+
+        return torch.cat(samples_ids)
+
+
 def compute_accuracy(outputs, target, topk=(1, 5)):
     acc_ks = train_adapter.accuracy(outputs, target, topk)
 
@@ -88,17 +146,13 @@ def make_hard_cache(cache_outs: torch.Tensor) -> torch.Tensor:
 
 
 class ImageAttention(BaseTrainer):
-    def load_labels(self, dataset):
-        labels = [label for _, label in dataset]
-        return torch.IntTensor(labels).to(self.cfg.meta.device)
-
     def setup_dataset(self):
         self.dataset = hydra.utils.instantiate(self.cfg.dataset)
-        self.test_labels = self.load_labels(self.dataset)
+        self.test_labels = load_labels(self.dataset).to(self.cfg.meta.device)
         self.cache_labels: tp.Optional[torch.Tensor] = None
         if self.cfg.cache.dataset:
             cache_dataset = hydra.utils.instantiate(self.cfg.cache.dataset)
-            self.cache_labels = self.load_labels(cache_dataset)
+            self.cache_labels = load_labels(cache_dataset).to(self.cfg.meta.device)
 
     def load_test_text_features(self, device: torch.device):
         clip_model, _ = clip.load(self.cfg.clip.model_name, device, jit=False)
@@ -121,6 +175,10 @@ class ImageAttention(BaseTrainer):
             cache_labels = self.cache_labels[samples_inds]
             eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
             self.logger.log_info(f'internal cache: acc@1={eval_top1}, acc@5={eval_top5}')
+            if self.cfg.cache.get('replace_outs_with_golds', False):
+                cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).half()
+                eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
+                self.logger.log_info(f'internal cache (after replace): acc@1={eval_top1}, acc@5={eval_top5}')
 
         return cache_image_features, cache_image_outs
 

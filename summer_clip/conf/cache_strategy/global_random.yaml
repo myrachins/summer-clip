@@ -1,0 +1,2 @@
+_target_: summer_clip.clip_searcher.image_attention.GlobalRandomSampleStrategy
+topk: 16
