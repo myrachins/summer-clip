@@ -29,7 +29,7 @@ init_alpha: 1.0
 # ------ Basic Config ------
 dataset: 'imagenet'
 shots: 16
-backbone: 'ViT-B/16'
+backbone: 'RN50'
 
 lr: 0.001
 augment_epoch: 1

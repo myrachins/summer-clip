@@ -43,7 +43,7 @@ class TipAdapterTrainer(BaseTrainer):
         # Zero-shot CLIP
         clip_logits = 100. * self.test_features @ self.clip_weights
         acc = tip_utils.cls_acc(clip_logits, self.test_labels)
-        print("\n**** Zero-shot CLIP's test accuracy: {:.2f}. ****\n".format(acc))
+        self.logger.log_info(f"**** Zero-shot CLIP's test accuracy: {acc}. ****")
 
         # Tip-Adapter
         beta, alpha = self.cfg['init_beta'], self.cfg['init_alpha']
@@ -53,7 +53,7 @@ class TipAdapterTrainer(BaseTrainer):
 
         tip_logits = clip_logits + cache_logits * alpha
         acc = tip_utils.cls_acc(tip_logits, self.test_labels)
-        print("**** Tip-Adapter's test accuracy: {:.2f}. ****\n".format(acc))
+        self.logger.log_info(f"**** Tip-Adapter's test accuracy: {acc}. ****")
 
         # Search Hyperparameters
         tip_utils.search_hp(
