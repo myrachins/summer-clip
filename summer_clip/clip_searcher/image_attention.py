@@ -73,13 +73,13 @@ class TopKStrategy(IndexedCacheStrategy):
         return torch.cat(samples_ids)
 
 
-def compute_accuracy(outputs, target):
-    acc1, acc5 = train_adapter.accuracy(outputs, target, topk=(1, 5))
+def compute_accuracy(outputs, target, topk=(1, 5)):
+    acc_ks = train_adapter.accuracy(outputs, target, topk)
 
     def transform_acc(acc):
         return 100. * acc / target.shape[0]
 
-    return transform_acc(acc1), transform_acc(acc5)
+    return [transform_acc(acc) for acc in acc_ks]
 
 
 def make_hard_cache(cache_outs: torch.Tensor) -> torch.Tensor:
