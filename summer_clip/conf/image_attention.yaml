@@ -7,6 +7,7 @@ defaults:
   - dataset@cache.dataset: imagenet_train_no_image
   - prompting: tip_imagenet
   - cache_strategy: topk
+  - cache_value_strategy: hard_cache
 
 clip:
   model_name: RN50

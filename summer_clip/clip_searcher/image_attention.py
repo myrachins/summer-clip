@@ -11,6 +11,7 @@ from summer_clip.clip_model import eval_clip
 from summer_clip.utils.trainer import run_trainer, BaseTrainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_searcher.cache_strategy import CacheStrategy, IndexedCacheStrategy
+from summer_clip.clip_searcher.cache_value_strategy import CacheValueStrategy
 
 
 def make_hard_cache(cache_outs: torch.Tensor) -> torch.Tensor:
@@ -74,20 +75,12 @@ class ImageAttention(BaseTrainer):
         self.logger.log_info(f'zero-shot clip: acc@1={eval_top1}, acc@5={eval_top5}')
 
         cache_weights = self.test_image_features.t() @ self.cache_image_features
-        # self.logger.log_info(f'cache_weights[0]: {cache_weights[0]}')
-        # self.logger.log_info(f'cache_weights[1]: {cache_weights[1]}')
-        # cache_values = F.softmax(100. * self.cache_image_outs, dim=1)
-        cache_values = make_hard_cache(self.cache_image_outs)
-        # self.logger.log_info(f'cache_values[0]: {cache_values[0]}')
-        # self.logger.log_info(f'cache_values[1]: {cache_values[1]}')
+        cache_value_strategy: CacheValueStrategy = hydra.utils.instantiate(self.cfg.cache_value_strategy)
+        cache_values = cache_value_strategy.transform(self.cache_image_outs)
 
         for beta, alpha in itertools.product(self.cfg.cache.beta, self.cfg.cache.alpha):
             cache_logits = (-1 * beta * (1 - cache_weights)).exp() @ cache_values
-            # self.logger.log_info(f'cache_logits[0]: {cache_logits[0]}')
-            # self.logger.log_info(f'cache_logits[1]: {cache_logits[1]}')
             searcher_logits = clip_logits + cache_logits * alpha
-            # self.logger.log_info(f'searcher_logits[0]: {searcher_logits[0]}')
-            # self.logger.log_info(f'searcher_logits[1]: {searcher_logits[1]}')
             eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
             self.logger.log_info(f'clip-searcher ({beta=}, {alpha=}): acc@1={eval_top1}, acc@5={eval_top5}')
 
