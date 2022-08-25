@@ -221,7 +221,7 @@ class ImageAttention(BaseTrainer):
             self.logger.log_info(f'clip-searcher ({beta=}, {alpha=}): acc@1={eval_top1}, acc@5={eval_top5}')
 
 
-@hydra.main(config_path='../conf', config_name='image_attention', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='image_attention', version_base='1.2')
 def run(cfg: DictConfig) -> None:
     run_trainer(ImageAttention, cfg)
 

@@ -60,5 +60,6 @@ Thumbs.db
 data/
 scripts/outs/
 outputs/*/*/*
+multirun/*/*/*
 # !outputs/*/*/*.log
 # !outputs/*/*/.hydra

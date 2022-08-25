@@ -24,3 +24,10 @@ cache:
 exp:
   project: clip_searcher
   name: image_attention
+
+# hydra:
+#   mode: MULTIRUN
+#   sweeper:
+#     params:
+#       cache_strategy: topk, global_random
+#       prompting: tip_imagenet, imagenet
