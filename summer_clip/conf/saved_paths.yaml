@@ -1,0 +1,37 @@
+# @package saved_paths
+
+image_features:
+  CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-38-43/image_features.pt
+  CIFAR100_test-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-21/16-47-25/image_features.pt
+
+  CIFAR10_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-44-05/image_features.pt
+  CIFAR10_test-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-50-52/image_features.pt
+
+  ImageNet_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-22/12-56-22/image_features.pt
+  ImageNet_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-21/18-35-13/image_features.pt
+  ImageNet_val-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-26-57/image_features.pt
+  ImageNet_val-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/19-55-09/image_features.pt
+
+  MNIST_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-23/12-49-24/image_features.pt
+  MNIST_test-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/14-57-54/image_features.pt
+
+  ImageNetV2-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/16-18-44/image_features.pt
+
+  EuroSAT-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/15-42-53/image_features.pt
+  EuroSAT-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/16-39-01/image_features.pt
+
+
+adapters:
+  linear:
+    CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09
+    CIFAR10_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-03-39
+    ImageNet_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-24/17-42-56
+    MNIST_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-02-09
+
+
+logits:
+  ImageNet_train-labels: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/18-56-12/image_labels.pt
+  ImageNet_train-ViT_B/16_tip-adapter: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-20/00-06-40/image_outs.pt
+  ImageNet_train-RN50-tip_adapter: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/22-01-02/image_outs.pt
+  EuroSAT-ViT_B/16-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-20/00-16-21/image_outs.pt
+  EuroSAT-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-23/14-52-14/image_outs.pt

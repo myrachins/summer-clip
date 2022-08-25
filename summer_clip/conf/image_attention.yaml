@@ -1,21 +1,22 @@
 defaults:
   - hydra_setup
   - adapter_setup
+  - saved_paths
   - _self_
   - dataset: imagenet_val_no_image
   - dataset@cache.dataset: imagenet_train_no_image
   - prompting: tip_imagenet
-  - cache_strategy: global_random
+  - cache_strategy: topk
 
 clip:
   model_name: RN50
 
 data:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/19-55-09/image_features.pt
+  image_features_path: ${saved_paths.image_features.ImageNet_val-RN50}
 
 cache:
-  image_features_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-21/18-35-13/image_features.pt
-  image_outs_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/22-01-02/image_outs.pt
+  image_features_path: ${saved_paths.image_features.ImageNet_train-RN50}
+  image_outs_path: ${saved_paths.logits.ImageNet_train-RN50-tip_adapter}
   alpha: [0, 1.0]
   beta: [0, 5.5]
   replace_outs_with_golds: true
