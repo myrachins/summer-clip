@@ -14,11 +14,6 @@ from summer_clip.clip_searcher.cache_strategy import CacheStrategy, IndexedCache
 from summer_clip.clip_searcher.cache_value_strategy import CacheValueStrategy
 
 
-def make_hard_cache(cache_outs: torch.Tensor) -> torch.Tensor:
-    _, labels_ids = cache_outs.max(dim=1)
-    return F.one_hot(labels_ids, num_classes=cache_outs.shape[1]).half()
-
-
 class ImageAttention(BaseTrainer):
     def setup_dataset(self):
         self.dataset = hydra.utils.instantiate(self.cfg.dataset)
