@@ -1,2 +1,2 @@
-_target_: summer_clip.clip_searcher.image_attention.PerPredClassRandomSampleStrategy
+_target_: summer_clip.clip_searcher.cache_strategy.PerPredClassRandomSampleStrategy
 topk: 16

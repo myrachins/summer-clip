@@ -1,1 +1,1 @@
-_target_: summer_clip.clip_searcher.image_attention.AllLogitsStrategy
+_target_: summer_clip.clip_searcher.cache_strategy.AllLogitsStrategy
