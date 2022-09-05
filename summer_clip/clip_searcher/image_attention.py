@@ -1,4 +1,3 @@
-import itertools
 import typing as tp
 
 import clip
@@ -8,10 +7,10 @@ import torch.nn.functional as F
 from omegaconf import DictConfig
 
 from summer_clip.clip_model import eval_clip
+from summer_clip.utils import hydra_utils
 from summer_clip.utils.trainer import run_trainer, BaseTrainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_searcher.cache_strategy import CacheStrategy, IndexedCacheStrategy
-from summer_clip.clip_searcher.cache_value_strategy import CacheValueStrategy
 
 
 class ImageAttention(BaseTrainer):
@@ -54,30 +53,38 @@ class ImageAttention(BaseTrainer):
 
         self.test_text_features = self.load_test_text_features(device)
         self.test_image_features = torch.load(self.cfg.data.image_features_path).to(device)
-        self.test_image_features /= self.test_image_features.norm(dim=0, keepdim=True)
 
-        cache_image_features = torch.load(self.cfg.cache.image_features_path).to(device)
-        cache_image_outs = torch.load(self.cfg.cache.image_outs_path).to(device)
-        self.logger.log_info(f'original-data-size: {cache_image_outs.shape[0]}')
-        cache_strategy: CacheStrategy = hydra.utils.instantiate(self.cfg.cache_strategy)
-        self.cache_image_features, self.cache_image_outs = self.build_cache(cache_strategy, cache_image_features, cache_image_outs)
-        self.cache_image_features /= self.cache_image_features.norm(dim=0, keepdim=True)
-        self.logger.log_info(f'cache-size: {self.cache_image_outs.shape[0]}')
+        self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path).to(device)
+        self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path).to(device)
+        self.logger.log_info(f'original-data-size: {self.origin_cache_image_outs.shape[0]}')
+
+    def compute_clip_logits(self) -> torch.Tensor:
+        norm_test_image_features = self.test_image_features / self.test_image_features.norm(dim=0, keepdim=True)
+        clip_logits = 100. * norm_test_image_features.t() @ self.test_text_features
+        return clip_logits
 
     def train_loop(self):
-        clip_logits = 100. * self.test_image_features.t() @ self.test_text_features
+        clip_logits = self.compute_clip_logits()
         eval_top1, eval_top5 = compute_accuracy(clip_logits, self.test_labels)
         self.logger.log_info(f'zero-shot clip: acc@1={eval_top1}, acc@5={eval_top5}')
 
-        cache_weights = self.test_image_features.t() @ self.cache_image_features
-        cache_value_strategy: CacheValueStrategy = hydra.utils.instantiate(self.cfg.cache_value_strategy)
-        cache_values = cache_value_strategy.transform(self.cache_image_outs)
-
-        for beta, alpha in itertools.product(self.cfg.cache.beta, self.cfg.cache.alpha):
-            cache_logits = (-1 * beta * (1 - cache_weights)).exp() @ cache_values
-            searcher_logits = clip_logits + cache_logits * alpha
-            eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
-            self.logger.log_info(f'clip-searcher ({beta=}, {alpha=}): acc@1={eval_top1}, acc@5={eval_top5}')
+        for cache_strategy, cache_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_strategy):
+            cache_image_features, cache_image_outs = self.build_cache(
+                cache_strategy, self.origin_cache_image_features, self.origin_cache_image_outs
+            )
+            self.logger.log_info(f'cache-size: {cache_image_outs.shape[0]}')
+            for cache_weights_strategy, cache_weights_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_weights_strategy):
+                cache_weights = cache_weights_strategy.transform(self.test_image_features, cache_image_features)
+                for cache_value_strategy, cache_value_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_value_strategy):
+                    cache_logits = cache_weights @ cache_value_strategy.transform(cache_image_outs)
+                    for alpha in self.cfg.cache.alpha:
+                        searcher_logits = clip_logits + cache_logits * alpha
+                        eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
+                        self.logger.log_info(dict(
+                            cache_strategy=cache_strategy_params, cache_value_strategy=cache_value_strategy_params,
+                            cache_weights_strategy=cache_weights_strategy_params, alpha=alpha,
+                            acc1=eval_top1, acc5=eval_top5
+                        ))
 
 
 @hydra.main(config_path='../conf', config_name='image_attention', version_base='1.2')

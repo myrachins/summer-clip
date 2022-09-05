@@ -8,6 +8,7 @@ defaults:
   - prompting: tip_imagenet
   - cache_strategy: topk
   - cache_value_strategy: hard_cache
+  - cache_weights_strategy: tip_adapter
 
 clip:
   model_name: RN50
@@ -19,8 +20,7 @@ cache:
   image_features_path: ${saved_paths.image_features.ImageNet_train-RN50}
   image_outs_path: ${saved_paths.logits.ImageNet_train-RN50-tip_adapter}
   alpha: [0, 1.0]
-  beta: [0, 5.5]
-  replace_outs_with_golds: true
+  replace_outs_with_golds: false
 
 exp:
   project: clip_searcher
