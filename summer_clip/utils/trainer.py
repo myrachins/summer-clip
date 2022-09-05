@@ -7,7 +7,7 @@ import torch.backends.cudnn
 import numpy as np
 from omegaconf import DictConfig, OmegaConf
 
-from summer_clip.trainers_utils import log_utils
+from summer_clip.utils import log_utils
 
 
 class BaseTrainer:
@@ -15,17 +15,17 @@ class BaseTrainer:
         self.cfg = cfg
 
     def to(self, device):
-        self.model.to(device)
+        self.model = self.model.to(device)  # type: ignore
 
     def train_mode(self):
-        self.model.train()
+        self.model.train()  # type: ignore
 
     def eval_mode(self):
-        self.model.eval()
+        self.model.eval()  # type: ignore
 
     def setup_logger(self):
         config_for_logger = OmegaConf.to_container(self.cfg)
-        config_for_logger["PID"] = os.getpid()
+        config_for_logger["PID"] = os.getpid()  # type: ignore
         exp_logger = log_utils.WandbLogger(
             project=self.cfg.exp.project,
             name=self.cfg.exp.name,
@@ -77,8 +77,8 @@ class BaseTrainer:
         pass
 
     def scheduler_step(self):
-        if hasattr(self, 'scheduler') and self.scheduler is not None:
-            self.scheduler.step()
+        if hasattr(self, 'scheduler') and self.scheduler is not None:  # type: ignore
+            self.scheduler.step()  # type: ignore
 
     def train_loop(self):
         training_time_log = log_utils.TimeLog(
@@ -108,7 +108,7 @@ class BaseTrainer:
         training_time_log.end()
 
 
-def set_random_state(random_state: int):
+def set_random_state(random_state: int) -> None:
     os.environ['PYTHONHASHSEED'] = str(random_state)
     random.seed(random_state)
     np.random.seed(random_state)

@@ -1,2 +1,2 @@
 _target_: summer_clip.clip_searcher.cache_strategy.TopKStrategy
-topk: 16
+topk: [16]

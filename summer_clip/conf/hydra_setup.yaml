@@ -1,3 +1,11 @@
 hydra:
   job:
     chdir: True
+  job_logging:
+    formatters:
+      json:
+        format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+        class: pythonjsonlogger.jsonlogger.JsonFormatter
+    handlers:
+      file:
+        formatter: json
