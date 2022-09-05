@@ -3,7 +3,7 @@ import itertools
 import typing as tp
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 
 def load_obj(obj_path: str, default_obj_path: str = "") -> tp.Any:
@@ -36,11 +36,15 @@ def type_full_name(type_: type) -> tp.Optional[str]:
 
 
 def instantiate_all(cfg: DictConfig) -> tp.Generator[tp.Tuple[tp.Any, tp.Dict[str, tp.Any]], None, None]:
+    def create_dict_cfg(cfg: DictConfig) -> tp.Dict[str, tp.Any]:
+        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+        return tp.cast(tp.Dict[str, tp.Any], cfg_dict)
+
     cfg = cfg.copy()
-    cfg_dict: tp.Dict[str, tp.Any] = dict(cfg)
+    cfg_dict = create_dict_cfg(cfg)
     cfg_dict.pop('_target_')
 
     for param_values in itertools.product(*cfg_dict.values()):
         param_to_value = dict(zip(cfg_dict.keys(), param_values))
         cfg.update(param_to_value)
-        yield hydra.utils.instantiate(cfg), dict(cfg)
+        yield hydra.utils.instantiate(cfg), create_dict_cfg(cfg)

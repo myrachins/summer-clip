@@ -1,4 +1,4 @@
 _target_: summer_clip.clip_searcher.cache_strategy.PerGoldClassRandomSampleStrategy
-topk: [16]
+topk: [2, 4, 8, 16]
 cache_dataset:
   - ${cache.dataset}

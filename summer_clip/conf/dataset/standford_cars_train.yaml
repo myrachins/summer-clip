@@ -1,0 +1,3 @@
+_target_: torchvision.datasets.StanfordCars
+root: ${path.cache_dir}
+split: train
