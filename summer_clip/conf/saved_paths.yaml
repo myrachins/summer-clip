@@ -20,6 +20,9 @@ image_features:
   EuroSAT-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/15-42-53/image_features.pt
   EuroSAT-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-18/16-39-01/image_features.pt
 
+  StanfordCars_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-13-21/image_features.pt
+  StanfordCars_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-34-14/image_features.pt
+
 
 adapters:
   linear:
@@ -35,3 +38,4 @@ logits:
   ImageNet_train-RN50-tip_adapter: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-22/22-01-02/image_outs.pt
   EuroSAT-ViT_B/16-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-20/00-16-21/image_outs.pt
   EuroSAT-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-23/14-52-14/image_outs.pt
+  StanfordCars_train-RN50-tip_standford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-53-58/image_outs.pt
