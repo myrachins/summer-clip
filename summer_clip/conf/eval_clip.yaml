@@ -3,14 +3,14 @@ defaults:
   - adapter_setup
   - saved_paths
   - _self_
-  - dataset: imagenet_val_no_image
-  - prompting: imagenet
+  - dataset: eurosat
+  - prompting: tip_eurosat
 
 clip:
   model_name: RN50
 
 eval:
-  image_features_path: ${saved_paths.image_features.ImageNet_val-RN50}
+  image_features_path: ${saved_paths.image_features.EuroSAT-RN50}
 
 data:
   num_workers: 2
