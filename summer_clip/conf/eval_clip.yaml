@@ -4,7 +4,7 @@ defaults:
   - saved_paths
   - _self_
   - dataset: eurosat
-  - prompting: tip_eurosat
+  - prompting: eurosat
 
 clip:
   model_name: RN50

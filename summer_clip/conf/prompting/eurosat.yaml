@@ -1,14 +1,16 @@
+# https://github.com/openai/CLIP/blob/main/data/prompts.md#eurosat - classes are in the wrong order
+
 classes: [
+    'annual crop land',
     'forest',
+    'brushland or shrubland',
+    'highway or road',
+    'industrial buildings or commercial buildings',
+    'pasture land',
     'permanent crop land',
     'residential buildings or homes or apartments',
     'river',
-    'pasture land',
     'lake or sea',
-    'brushland or shrubland',
-    'annual crop land',
-    'industrial buildings or commercial buildings',
-    'highway or road',
 ]
 
 templates: [
