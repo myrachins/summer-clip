@@ -80,7 +80,7 @@ class ImageAttention(BaseTrainer):
                     for alpha in self.cfg.cache.alpha:
                         searcher_logits = clip_logits + cache_logits * alpha
                         eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
-                        self.logger.log_info(dict(
+                        self.logger.log_info_wandb(dict(
                             cache_strategy=cache_strategy_params, cache_value_strategy=cache_value_strategy_params,
                             cache_weights_strategy=cache_weights_strategy_params, alpha=alpha,
                             acc1=eval_top1, acc5=eval_top5

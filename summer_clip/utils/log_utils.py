@@ -41,6 +41,13 @@ class LoggingManager:
     def log_info(self, output_info):
         self.console_logger.logger.info(output_info)
 
+    def log_wandb(self, output_info):
+        self.exp_logger.log(output_info)
+
+    def log_info_wandb(self, output_info):
+        self.log_info(output_info)
+        self.log_wandb(output_info)
+
 
 class WandbLogger:
     def __init__(self, **kwargs):
