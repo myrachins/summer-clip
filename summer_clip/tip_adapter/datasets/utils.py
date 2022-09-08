@@ -7,6 +7,7 @@ from collections import defaultdict
 import gdown
 import json
 import torch
+import torch.utils.data
 from torch.utils.data import Dataset as TorchDataset
 import torchvision.transforms as T
 from PIL import Image
@@ -107,14 +108,14 @@ class DatasetBase:
     2) domain generalization
     3) semi-supervised learning
     """
-    dataset_dir = '' # the directory where the dataset is stored
-    domains = [] # string names of all domains
+    dataset_dir = ''  # the directory where the dataset is stored
+    domains = []  # string names of all domains
 
     def __init__(self, train_x=None, train_u=None, val=None, test=None):
-        self._train_x = train_x # labeled training data
-        self._train_u = train_u # unlabeled training data (optional)
-        self._val = val # validation data (optional)
-        self._test = test # test data
+        self._train_x = train_x  # labeled training data
+        self._train_u = train_u  # unlabeled training data (optional)
+        self._val = val  # validation data (optional)
+        self._test = test  # test data
 
         self._num_classes = self.get_num_classes(train_x)
         self._lab2cname, self._classnames = self.get_lab2cname(train_x)
@@ -282,10 +283,11 @@ class DatasetBase:
 
 class DatasetWrapper(TorchDataset):
     def __init__(self, data_source, input_size, transform=None, is_train=False,
-                 return_img0=False, k_tfm=1):
+                 return_img0=False, k_tfm=1, load_images=True):
         self.data_source = data_source
-        self.transform = transform # accept list (tuple) as input
+        self.transform = transform  # accept list (tuple) as input
         self.is_train = is_train
+        self.load_images = load_images
         # Augmenting an image K>1 times is only allowed during training
         self.k_tfm = k_tfm if is_train else 1
         self.return_img0 = return_img0
@@ -319,9 +321,9 @@ class DatasetWrapper(TorchDataset):
             'impath': item.impath
         }
 
-        img0 = read_image(item.impath)
+        img0 = read_image(item.impath) if self.load_images else None
 
-        if self.transform is not None:
+        if img0 is not None and self.transform is not None:
             if isinstance(self.transform, (list, tuple)):
                 for i, tfm in enumerate(self.transform):
                     img = self._transform_image(tfm, img0)

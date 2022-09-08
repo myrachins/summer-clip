@@ -3,8 +3,8 @@ defaults:
   - adapter_setup
   - saved_paths
   - _self_
-  - dataset: tip_stanford_cars_test
-  - dataset@cache.dataset: tip_stanford_cars_train
+  - dataset: tip_stanford_cars_test_no_image
+  - dataset@cache.dataset: tip_stanford_cars_train_no_image
   - prompting: tip_stanford_cars
   - cache_strategy: per_gold_class_random
   - cache_value_strategy: hard_cache

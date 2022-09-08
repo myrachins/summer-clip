@@ -29,12 +29,15 @@ class ImageNetV2Wrapper(ImageNetV2Dataset):
 class TipAdapterDataset(Dataset):
     def __init__(self, dataset: str, split: str, root_path: str, shots: int,
                  input_size: int = 224, is_train: bool = False, use_custom_preprocess: bool = False,
-                 transform: tp.Optional[tp.Any] = None) -> None:
+                 load_images: bool = True, transform: tp.Optional[tp.Any] = None) -> None:
         super().__init__()
         self.tip_base_dataset = build_dataset(dataset, root_path, shots)
         split_data = self._select_split(self.tip_base_dataset, split)
         dataset_transform = transform if not use_custom_preprocess else self._get_custom_preprocess()
-        self.dataset = DatasetWrapper(split_data, input_size, transform=dataset_transform, is_train=is_train)
+        self.dataset = DatasetWrapper(
+            split_data, input_size, transform=dataset_transform,
+            is_train=is_train, load_images=load_images
+        )
 
     @staticmethod
     def _select_split(dataset: DatasetBase, split: str) -> tp.Any:
