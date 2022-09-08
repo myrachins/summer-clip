@@ -3,9 +3,9 @@ defaults:
   - adapter_setup
   - saved_paths
   - _self_
-  - dataset: standford_cars_test
-  - dataset@cache.dataset: standford_cars_train
-  - prompting: tip_standford_cars
+  - dataset: stanford_cars_test
+  - dataset@cache.dataset: stanford_cars_train
+  - prompting: tip_stanford_cars
   - cache_strategy: per_gold_class_random
   - cache_value_strategy: hard_cache
   - cache_weights_strategy: tip_adapter
@@ -18,7 +18,7 @@ data:
 
 cache:
   image_features_path: ${saved_paths.image_features.StanfordCars_train-RN50}
-  image_outs_path: ${saved_paths.logits.StanfordCars_train-RN50-tip_standford_cars}
+  image_outs_path: ${saved_paths.logits.StanfordCars_train-RN50-tip_stanford_cars}
   alpha: [1.0]
   replace_outs_with_golds: true
 

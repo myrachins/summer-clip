@@ -2,7 +2,7 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: standford_cars_test
+  - dataset: stanford_cars_test
 
 clip:
   model_name: RN50

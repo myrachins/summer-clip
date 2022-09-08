@@ -3,8 +3,8 @@ defaults:
   - adapter_setup
   - saved_paths
   - _self_
-  - dataset: standford_cars_train
-  - prompting: tip_standford_cars
+  - dataset: stanford_cars_train
+  - prompting: tip_stanford_cars
 
 clip:
   model_name: RN50

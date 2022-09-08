@@ -41,7 +41,7 @@ def eval_clip(model_name: str, dataset_cfg: DictConfig, classes: tp.Optional[tp.
 
     clip_classes = classes or dataset.classes
     text_features = zeroshot_classifier(clip_model, clip_classes, templates)
-    image_features = torch.load(image_features_path)
+    image_features = torch.load(image_features_path).to(device)
 
     top1, top5 = train_adapter.compute_accuracy(image_features, text_features, loader)
     logging.info(f'acc@1: {top1}')
