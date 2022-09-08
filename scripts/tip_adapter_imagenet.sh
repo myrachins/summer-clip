@@ -5,7 +5,7 @@
 nvidia-smi
 date
 
-PY_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/tip_adapter/tip_adapter.py"
+PY_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/tip_adapter/tip_adapter_imagenet.py"
 SUMMER_CLIP_PATH="/home/myurachinskiy/CLIP/summer-clip"
 
 export PYTHONPATH="${PYTHONPATH}:${SUMMER_CLIP_PATH}"

@@ -9,7 +9,7 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataloader import DataLoader
 from omegaconf import DictConfig
 
-from summer_clip.tip_adapter.imagenet import ImageNet
+from summer_clip.tip_adapter.datasets.imagenet import ImageNet
 from summer_clip.utils.trainer import BaseTrainer
 from summer_clip.utils.trainer import run_trainer
 from summer_clip.tip_adapter import utils as tip_utils
@@ -61,7 +61,7 @@ class TipAdapterTrainer(BaseTrainer):
         )
 
 
-@hydra.main(config_path='../conf', config_name='tip_adapter', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='tip_adapter_imagenet', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     run_trainer(TipAdapterTrainer, cfg)
 
