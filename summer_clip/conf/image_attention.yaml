@@ -19,7 +19,7 @@ data:
 cache:
   image_features_path: ${saved_paths.image_features.StanfordCars_train-RN50}
   image_outs_path: ${saved_paths.logits.StanfordCars_train-RN50-tip_stanford_cars}
-  alpha: [1.0]
+  alpha: [3]
   replace_outs_with_golds: true
 
 exp:

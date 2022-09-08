@@ -23,6 +23,8 @@ image_features:
   StanfordCars_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-13-21/image_features.pt
   StanfordCars_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-34-14/image_features.pt
 
+  StanfordCars_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-08/15-32-04/image_features.pt
+  StanfordCars_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-08/15-42-19/image_features.pt
 
 adapters:
   linear:
