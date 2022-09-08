@@ -336,7 +336,7 @@ class DatasetWrapper(TorchDataset):
         if self.return_img0:
             output['img0'] = self.to_tensor(img0)
 
-        return output['img'], output['label']
+        return output.get('img'), output['label']
 
     def _transform_image(self, tfm, img0):
         img_list = []

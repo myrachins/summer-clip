@@ -31,8 +31,8 @@ class TipAdapterDataset(Dataset):
                  input_size: int = 224, is_train: bool = False, use_custom_preprocess: bool = False,
                  transform: tp.Optional[tp.Any] = None) -> None:
         super().__init__()
-        tip_base_dataset = build_dataset(dataset, root_path, shots)
-        split_data = self._select_split(tip_base_dataset, split)
+        self.tip_base_dataset = build_dataset(dataset, root_path, shots)
+        split_data = self._select_split(self.tip_base_dataset, split)
         dataset_transform = transform if not use_custom_preprocess else self._get_custom_preprocess()
         self.dataset = DatasetWrapper(split_data, input_size, transform=dataset_transform, is_train=is_train)
 
@@ -61,3 +61,7 @@ class TipAdapterDataset(Dataset):
 
     def __len__(self) -> int:
         return len(self.dataset)
+
+    @property
+    def classes(self) -> tp.List[str]:
+        return self.tip_base_dataset.classnames
