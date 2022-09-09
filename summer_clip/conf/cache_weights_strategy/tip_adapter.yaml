@@ -1,2 +1,2 @@
 _target_: summer_clip.clip_searcher.cache_weights_strategy.TipAdapterWeightsStrategy
-beta: [1]
+beta: [0.1, 1.0, 5.5]
