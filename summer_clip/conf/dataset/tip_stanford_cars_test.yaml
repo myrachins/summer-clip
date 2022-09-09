@@ -2,6 +2,6 @@ _target_: summer_clip.utils.datasets.TipAdapterDataset
 dataset: stanford_cars
 split: test
 root_path: ${path.cache_dir}
-shots: 16
+shots: -1
 is_train: false
 use_custom_preprocess: false
