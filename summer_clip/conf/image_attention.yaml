@@ -20,7 +20,7 @@ cache:
   image_features_path: ${saved_paths.image_features.StanfordCars_tip_train-RN50}
   image_outs_path: ${saved_paths.logits.StanfordCars_tip_train-RN50-tip_stanford_cars}
   alpha: [0.0, 0.1, 0.5, 1., 2., 3., 4.]
-  replace_outs_with_golds: true
+  replace_outs_with_golds: false
 
 exp:
   project: clip_searcher

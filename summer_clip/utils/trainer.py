@@ -120,10 +120,12 @@ def set_random_state(random_state: int) -> None:
     torch.backends.cudnn.deterministic = True
 
 
-def run_trainer(trainer_cls: type, cfg: DictConfig) -> None:
+def run_trainer(trainer_cls: type, cfg: DictConfig) -> BaseTrainer:
     print(OmegaConf.to_yaml(cfg))
     set_random_state(cfg.meta.random_state)
 
     trainer = trainer_cls(cfg)
     trainer.setup()
     trainer.train_loop()
+
+    return trainer
