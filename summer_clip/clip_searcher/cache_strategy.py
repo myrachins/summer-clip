@@ -45,26 +45,40 @@ class ThresholdStrategy(IndexedCacheStrategy):
         return confidence_mask.nonzero().squeeze()
 
 
+def select_topk_per_label(image_labels: torch.Tensor, image_outs: torch.Tensor, topk: int) -> torch.Tensor:
+    pred_outs, _ = image_outs.max(dim=1)
+    samples_ids = []
+
+    for label in image_labels.unique():
+        label_mask = (image_labels == label)
+        label_pred_outs = pred_outs[label_mask]
+        label_topk = min(topk, label_pred_outs.shape[0])
+        _, top_samples_inds = label_pred_outs.topk(label_topk)
+        global_top_samples_inds = label_mask.nonzero().squeeze(dim=1)[top_samples_inds]
+        samples_ids.append(global_top_samples_inds)
+
+    return torch.cat(samples_ids)
+
+
 class TopKStrategy(IndexedCacheStrategy):
     def __init__(self, topk: int) -> None:
         super().__init__()
         self.topk = topk
 
     def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
-        pred_outs, label_preds = image_outs.max(dim=1)
-        unique_labels = label_preds.unique()
-        print(f'Unique pred labels: {len(unique_labels)}')
-        samples_ids = []
+        _, label_preds = image_outs.max(dim=1)
+        print(f'Unique pred labels: {len(label_preds.unique())}')
+        return select_topk_per_label(label_preds, image_outs, self.topk)
 
-        for label in unique_labels:
-            label_mask = (label_preds == label)
-            label_pred_outs = pred_outs[label_mask]
-            topk = min(self.topk, label_pred_outs.shape[0])
-            _, top_samples_inds = label_pred_outs.topk(topk)
-            global_top_samples_inds = label_mask.nonzero().squeeze(dim=1)[top_samples_inds]
-            samples_ids.append(global_top_samples_inds)
 
-        return torch.cat(samples_ids)
+class TopKPerGoldStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int, cache_dataset: Dataset) -> None:
+        super().__init__()
+        self.topk = topk
+        self.cache_labels = load_labels(cache_dataset)
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        return select_topk_per_label(self.cache_labels, image_outs, self.topk)
 
 
 class GlobalRandomSampleStrategy(IndexedCacheStrategy):
@@ -79,6 +93,20 @@ class GlobalRandomSampleStrategy(IndexedCacheStrategy):
         return torch.LongTensor(samples_ids).to(image_outs.device)
 
 
+def select_k_random_per_label(image_labels: torch.Tensor, k: int) -> torch.Tensor:
+    samples_ids = []
+
+    for label in image_labels.unique():
+        label_inds = (image_labels == label).nonzero().squeeze()
+        label_k = min(k, label_inds.shape[0])
+        label_samples_inds_np = np.random.choice(label_inds.shape[0], size=label_k, replace=False)
+        label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
+        global_top_samples_inds = label_inds[label_samples_inds]
+        samples_ids.append(global_top_samples_inds)
+
+    return torch.cat(samples_ids)
+
+
 class PerGoldClassRandomSampleStrategy(IndexedCacheStrategy):
     def __init__(self, topk: int, cache_dataset: Dataset) -> None:
         super().__init__()
@@ -86,17 +114,7 @@ class PerGoldClassRandomSampleStrategy(IndexedCacheStrategy):
         self.cache_labels = load_labels(cache_dataset)
 
     def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
-        samples_ids = []
-
-        for label in self.cache_labels.unique():
-            label_inds = (self.cache_labels == label).nonzero().squeeze()
-            topk = min(self.topk, label_inds.shape[0])
-            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=topk, replace=False)
-            label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
-            global_top_samples_inds = label_inds[label_samples_inds]
-            samples_ids.append(global_top_samples_inds)
-
-        return torch.cat(samples_ids)
+        return select_k_random_per_label(self.cache_labels, self.topk)
 
 
 class PerPredClassRandomSampleStrategy(IndexedCacheStrategy):
@@ -108,14 +126,4 @@ class PerPredClassRandomSampleStrategy(IndexedCacheStrategy):
         _, label_preds = image_outs.max(dim=1)
         unique_labels = label_preds.unique()
         print(f'Unique pred labels: {len(unique_labels)}')
-        samples_ids = []
-
-        for label in unique_labels:
-            label_inds = (label_preds == label).nonzero().squeeze()
-            topk = min(self.topk, label_inds.shape[0])
-            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=topk, replace=False)
-            label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
-            global_top_samples_inds = label_inds[label_samples_inds]
-            samples_ids.append(global_top_samples_inds)
-
-        return torch.cat(samples_ids)
+        return select_k_random_per_label(label_preds, self.topk)
