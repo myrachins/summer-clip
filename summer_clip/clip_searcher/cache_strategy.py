@@ -74,6 +74,7 @@ class GlobalRandomSampleStrategy(IndexedCacheStrategy):
 
     def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
         samples_num = self.topk * image_outs.shape[1]
+        samples_num = min(samples_num, image_outs.shape[0])
         samples_ids = np.random.choice(image_outs.shape[0], size=samples_num, replace=False)
         return torch.LongTensor(samples_ids).to(image_outs.device)
 
@@ -89,7 +90,8 @@ class PerGoldClassRandomSampleStrategy(IndexedCacheStrategy):
 
         for label in self.cache_labels.unique():
             label_inds = (self.cache_labels == label).nonzero().squeeze()
-            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=self.topk, replace=False)
+            topk = min(self.topk, label_inds.shape[0])
+            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=topk, replace=False)
             label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
             global_top_samples_inds = label_inds[label_samples_inds]
             samples_ids.append(global_top_samples_inds)
@@ -110,7 +112,8 @@ class PerPredClassRandomSampleStrategy(IndexedCacheStrategy):
 
         for label in unique_labels:
             label_inds = (label_preds == label).nonzero().squeeze()
-            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=self.topk, replace=False)
+            topk = min(self.topk, label_inds.shape[0])
+            label_samples_inds_np = np.random.choice(label_inds.shape[0], size=topk, replace=False)
             label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)
             global_top_samples_inds = label_inds[label_samples_inds]
             samples_ids.append(global_top_samples_inds)
