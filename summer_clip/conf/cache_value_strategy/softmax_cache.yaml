@@ -1,2 +1,2 @@
 _target_: summer_clip.clip_searcher.cache_value_strategy.SoftmaxCacheStrategy
-scale: [1., 10., 100.]
+scale: [100., 200., 400., 800., 1600.]
