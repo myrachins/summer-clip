@@ -45,13 +45,12 @@ class ThresholdStrategy(IndexedCacheStrategy):
         return confidence_mask.nonzero().squeeze()
 
 
-def select_topk_per_label(image_labels: torch.Tensor, image_outs: torch.Tensor, topk: int) -> torch.Tensor:
-    pred_outs, _ = image_outs.max(dim=1)
+def select_topk_per_label(image_labels: torch.Tensor, image_logits: torch.Tensor, topk: int) -> torch.Tensor:
     samples_ids = []
 
     for label in image_labels.unique():
         label_mask = (image_labels == label)
-        label_pred_outs = pred_outs[label_mask]
+        label_pred_outs = image_logits[label_mask]
         label_topk = min(topk, label_pred_outs.shape[0])
         _, top_samples_inds = label_pred_outs.topk(label_topk)
         global_top_samples_inds = label_mask.nonzero().squeeze(dim=1)[top_samples_inds]
@@ -66,9 +65,9 @@ class TopKStrategy(IndexedCacheStrategy):
         self.topk = topk
 
     def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
-        _, label_preds = image_outs.max(dim=1)
+        image_logits, label_preds = image_outs.max(dim=1)
         print(f'Unique pred labels: {len(label_preds.unique())}')
-        return select_topk_per_label(label_preds, image_outs, self.topk)
+        return select_topk_per_label(label_preds, image_logits, self.topk)
 
 
 class TopKPerGoldStrategy(IndexedCacheStrategy):
@@ -78,7 +77,10 @@ class TopKPerGoldStrategy(IndexedCacheStrategy):
         self.cache_labels = load_labels(cache_dataset)
 
     def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
-        return select_topk_per_label(self.cache_labels, image_outs, self.topk)
+        cache_labels = self.cache_labels.to(image_outs.device)
+        labels_indexes = cache_labels.long().unsqueeze(dim=0).t()
+        image_logits = image_outs.gather(1, labels_indexes).squeeze(dim=1)
+        return select_topk_per_label(cache_labels, image_logits, self.topk)
 
 
 class GlobalRandomSampleStrategy(IndexedCacheStrategy):
