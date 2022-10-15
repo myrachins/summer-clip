@@ -30,23 +30,25 @@ class ImageAttention(BaseTrainer):
         return test_text_features.to(device)
 
     def build_cache(self, cache_strategy: CacheStrategy, image_features: torch.Tensor, image_outs: torch.Tensor) \
-            -> tp.Tuple[torch.Tensor, torch.Tensor]:
+            -> tp.Tuple[torch.Tensor, torch.Tensor, tp.Dict[str, tp.Any]]:
         if not isinstance(cache_strategy, IndexedCacheStrategy):
-            return cache_strategy.transform(image_features, image_outs)
+            cache_image_features, cache_image_outs = cache_strategy.transform(image_features, image_outs)
+            return cache_image_features, cache_image_outs, {}
 
         samples_inds = cache_strategy.select(image_features, image_outs)
         cache_image_features, cache_image_outs = image_features[:, samples_inds], image_outs[samples_inds]
+        cache_info: tp.Dict[str, tp.Any] = dict(cache_size=cache_image_outs.shape[0])
 
         if self.cache_labels is not None:
             cache_labels = self.cache_labels[samples_inds]
             eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
-            self.logger.log_info(f'internal cache: acc@1={eval_top1}, acc@5={eval_top5}')
+            cache_info.update(dict(acc1=eval_top1, acc5=eval_top5))
             if self.cfg.cache.get('replace_outs_with_golds', False):
                 cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).half()
                 eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
-                self.logger.log_info(f'internal cache (after replace): acc@1={eval_top1}, acc@5={eval_top5}')
+                cache_info.update(dict(acc1_replace=eval_top1, acc5_replace=eval_top5))
 
-        return cache_image_features, cache_image_outs
+        return cache_image_features, cache_image_outs, cache_info
 
     def setup_model(self):
         device = torch.device(self.cfg.meta.device)
@@ -66,13 +68,13 @@ class ImageAttention(BaseTrainer):
     def train_loop(self):
         clip_logits = self.compute_clip_logits()
         eval_top1, eval_top5 = compute_accuracy(clip_logits, self.test_labels)
-        self.logger.log_info(f'zero-shot clip: acc@1={eval_top1}, acc@5={eval_top5}')
+        self.logger.log_info(dict(acc1=eval_top1, acc5=eval_top5, type='zero_shot'))
 
         for cache_strategy, cache_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_strategy):
-            cache_image_features, cache_image_outs = self.build_cache(
+            cache_image_features, cache_image_outs, cache_info = self.build_cache(
                 cache_strategy, self.origin_cache_image_features, self.origin_cache_image_outs
             )
-            self.logger.log_info(f'cache-size: {cache_image_outs.shape[0]}')
+            self.logger.log_info(dict(**cache_info, cache_strategy=cache_strategy_params, type='cache_info'))
             for cache_weights_strategy, cache_weights_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_weights_strategy):
                 cache_weights = cache_weights_strategy.transform(self.test_image_features, cache_image_features)
                 for cache_value_strategy, cache_value_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_value_strategy):
@@ -83,7 +85,7 @@ class ImageAttention(BaseTrainer):
                         self.logger.log_info_wandb(dict(
                             cache_strategy=cache_strategy_params, cache_value_strategy=cache_value_strategy_params,
                             cache_weights_strategy=cache_weights_strategy_params, alpha=alpha,
-                            acc1=eval_top1, acc5=eval_top5
+                            acc1=eval_top1, acc5=eval_top5, type='searcher_result'
                         ))
 
 
