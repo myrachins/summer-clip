@@ -1,0 +1,20 @@
+defaults:
+  - hydra_setup
+  - adapter_setup
+  - saved_paths
+  - _self_
+  - dataset: tip_stanford_cars_test_no_image
+  - prompting: tip_stanford_cars
+
+clip:
+  model_name: RN50
+
+pca:
+  n_components: [8, 16, 32, 64, 128]
+
+data:
+  image_features_path: ${saved_paths.image_features.StanfordCars_tip_test-RN50}
+
+exp:
+  project: clip_searcher
+  name: image_attention
