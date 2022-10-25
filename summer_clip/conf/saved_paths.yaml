@@ -45,3 +45,4 @@ logits:
   EuroSAT-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-08-23/14-52-14/image_outs.pt
   StanfordCars_train-RN50-tip_stanford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-53-58/image_outs.pt
   StanfordCars_tip_train-RN50-tip_stanford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-09/10-38-05/image_outs.pt
+  EuroSAT_tip_train-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-10-25/17-35-00/image_outs.pt
