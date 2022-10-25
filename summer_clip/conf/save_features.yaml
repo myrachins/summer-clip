@@ -2,7 +2,7 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: tip_stanford_cars_test
+  - dataset: tip_eurosat_test
 
 clip:
   model_name: RN50
