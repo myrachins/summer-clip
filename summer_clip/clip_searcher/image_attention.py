@@ -94,26 +94,27 @@ class ImageAttention(BaseTrainer):
             zeroshot_info['preds_path'] = str(self.preds_saver.save_tensor(self.logits_to_preds(clip_logits)))
         self.logger.log_info(dict(**zeroshot_info, type='zero_shot'))
 
-        for cache_strategy, cache_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_strategy):
-            cache_image_features, cache_image_outs, cache_info = self.build_cache(
-                cache_strategy, self.origin_cache_image_features, self.origin_cache_image_outs
-            )
-            self.logger.log_info(dict(**cache_info, cache_strategy=cache_strategy_params, type='cache_info'))
-            for cache_weights_strategy, cache_weights_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_weights_strategy):
-                cache_weights = cache_weights_strategy.transform(self.test_image_features, cache_image_features)
-                for cache_value_strategy, cache_value_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_value_strategy):
-                    cache_logits = cache_weights @ cache_value_strategy.transform(cache_image_outs)
-                    for alpha in self.cfg.cache.alpha:
-                        searcher_logits = clip_logits + cache_logits * alpha
-                        eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
-                        searcher_info: tp.Dict[str, tp.Any] = dict(
-                            cache_strategy=cache_strategy_params, cache_value_strategy=cache_value_strategy_params,
-                            cache_weights_strategy=cache_weights_strategy_params, alpha=alpha,
-                            acc1=eval_top1, acc5=eval_top5
-                        )
-                        if self.cfg.run_saves.save_preds:
-                            searcher_info['preds_path'] = str(self.preds_saver.save_tensor(self.logits_to_preds(searcher_logits)))
-                        self.logger.log_info_wandb(dict(**searcher_info, type='searcher_result'))
+        for cache_strategy_cfg in self.cfg.cache_strategies.values():
+            for cache_strategy, cache_strategy_params in hydra_utils.instantiate_all(cache_strategy_cfg):
+                cache_image_features, cache_image_outs, cache_info = self.build_cache(
+                    cache_strategy, self.origin_cache_image_features, self.origin_cache_image_outs
+                )
+                self.logger.log_info(dict(**cache_info, cache_strategy=cache_strategy_params, type='cache_info'))
+                for cache_weights_strategy, cache_weights_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_weights_strategy):
+                    cache_weights = cache_weights_strategy.transform(self.test_image_features, cache_image_features)
+                    for cache_value_strategy, cache_value_strategy_params in hydra_utils.instantiate_all(self.cfg.cache_value_strategy):
+                        cache_logits = cache_weights @ cache_value_strategy.transform(cache_image_outs)
+                        for alpha in self.cfg.cache.alpha:
+                            searcher_logits = clip_logits + cache_logits * alpha
+                            eval_top1, eval_top5 = compute_accuracy(searcher_logits, self.test_labels)
+                            searcher_info: tp.Dict[str, tp.Any] = dict(
+                                cache_strategy=cache_strategy_params, cache_value_strategy=cache_value_strategy_params,
+                                cache_weights_strategy=cache_weights_strategy_params, alpha=alpha,
+                                acc1=eval_top1, acc5=eval_top5
+                            )
+                            if self.cfg.run_saves.save_preds:
+                                searcher_info['preds_path'] = str(self.preds_saver.save_tensor(self.logits_to_preds(searcher_logits)))
+                            self.logger.log_info_wandb(dict(**searcher_info, type='searcher_result'))
 
 
 @hydra.main(config_path='../conf', config_name='image_attention', version_base='1.2')

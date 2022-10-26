@@ -6,9 +6,15 @@ defaults:
   - dataset: tip_eurosat_test_no_image
   - dataset@cache.dataset: tip_eurosat_train_no_image
   - prompting: tip_eurosat
-  - cache_strategy: topk
   - cache_value_strategy: hard_cache
   - cache_weights_strategy: tip_adapter
+  # https://github.com/facebookresearch/hydra/issues/1939
+  - cache_strategy@cache_strategies.topk: topk
+  - cache_strategy@cache_strategies.topk_per_gold: topk_per_gold
+  - cache_strategy@cache_strategies.per_pred_class_random: per_pred_class_random
+  - cache_strategy@cache_strategies.per_gold_class_random: per_gold_class_random
+  - cache_strategy@cache_strategies.global_random: global_random
+  - cache_strategy@cache_strategies.all_logits: all_logits
 
 clip:
   model_name: RN50
