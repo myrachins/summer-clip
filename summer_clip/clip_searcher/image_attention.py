@@ -92,6 +92,8 @@ class ImageAttention(BaseTrainer):
         zeroshot_info: tp.Dict[str, tp.Any] = dict(acc1=eval_top1, acc5=eval_top5)
         if self.cfg.run_saves.save_preds:
             zeroshot_info['preds_path'] = str(self.preds_saver.save_tensor(self.logits_to_preds(clip_logits)))
+        if self.cfg.run_saves.save_logits:
+            zeroshot_info['logits_path'] = str(self.preds_saver.save_tensor(clip_logits))
         self.logger.log_info(dict(**zeroshot_info, type='zero_shot'))
 
         for cache_strategy_cfg in self.cfg.cache_strategies.values():
