@@ -1,0 +1,62 @@
+defaults:
+  - hydra_setup
+  - meta_setup
+  - _self_
+
+clip:
+  tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
+  model_name: RN50
+
+gpt:
+  model_id: gpt2-large
+
+clip_gpt:
+  adap_emb_hid_dim: 256
+  adap_head_hid_dim: null  # tied adapter with emb layer
+
+dataset:
+  train:
+    dataset:
+      path: wikitext
+      name: wikitext-2-raw-v1
+      split: validation
+    max_length: 80
+    text_column: text
+  val:
+    dataset:
+      path: wikitext
+      name: wikitext-2-raw-v1
+      split: test
+    max_length: 80
+    text_column: text
+
+data_loader:
+  train:
+    batch_size: 512
+    shuffle: true
+    pin_memory: true
+    num_workers: 4
+  val:
+    batch_size: 512
+    shuffle: false
+    pin_memory: true
+    num_workers: 4
+
+accelerator:
+  fp16: true
+
+optim:
+  weight_decay: 0.1
+  adamw_kwargs:
+    lr: 5e-4
+
+scheduler:
+  name: cosine
+  num_warmup_steps: 1000
+  
+train:
+  num_train_epochs: 2
+  info_steps: 1
+  gradient_accumulation_steps: 8
+  eval_steps: 64
+  checkpoints_dir: checkpoints/

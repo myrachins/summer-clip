@@ -1,4 +1,3 @@
-import itertools
 import typing as tp
 from pathlib import Path
 from copy import copy
@@ -8,8 +7,6 @@ import torch.utils
 import torch.optim
 import clip
 import hydra
-import wandb
-import numpy as np
 from torch import nn
 from tqdm import tqdm
 from accelerate import Accelerator
@@ -83,11 +80,11 @@ class ClipGPTTrainer(BaseTrainer):
     def setup_dataset(self):
         self.tokenizer = CLIPTokenizer.from_pretrained(self.cfg.clip.tokenizer_id)
 
-        train_dataset: Dataset = load_dataset(**self.cfg.dataset.train.dataset_name)  # type: ignore
+        train_dataset: Dataset = load_dataset(**self.cfg.dataset.train.dataset)  # type: ignore
         self.train_dataset = tokenize_dataset(
             train_dataset, self.tokenizer, self.cfg.dataset.train.max_length, self.cfg.dataset.train.text_column
         )
-        val_dataset: Dataset = load_dataset(**self.cfg.dataset.val.dataset_name)  # type: ignore
+        val_dataset: Dataset = load_dataset(**self.cfg.dataset.val.dataset)  # type: ignore
         self.val_dataset = tokenize_dataset(
             val_dataset, self.tokenizer, self.cfg.dataset.val.max_length, self.cfg.dataset.val.text_column
         )
@@ -123,12 +120,12 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_model(self):
         clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
-        gpt_model = AutoModelForCausalLM.from_pretrained(self.cfg.gpt.model_name)
+        gpt_model = AutoModelForCausalLM.from_pretrained(self.cfg.gpt.model_id)
         self.model = ClipGPT(ClipGPTConfig(**self.cfg.clip_gpt), clip_model.token_embedding, gpt_model)
 
     def train_epoch(self, epoch_num, epoch_info):
-        self.accelerator.print(f'Running epoch {epoch_num} / {self.cfg.train.num_train_epochs}...')
         train_cfg = self.cfg.train
+        self.accelerator.print(f'Running epoch {epoch_num} / {train_cfg.num_train_epochs}...')
         model = self.model.train()
         completed_steps = 0
 
@@ -136,7 +133,7 @@ class ClipGPTTrainer(BaseTrainer):
             enumerate(self.loaders['train'], start=1), disable=not self.accelerator.is_local_main_process
         ):
             loss = model(**batch).loss
-            if step % train_cfg.eval_steps == 0:
+            if step % train_cfg.info_steps == 0:
                 self.logger.exp_logger.log({
                     "lr": self.scheduler.get_lr(),
                     "samples": step * batch["input_ids"].shape[0],
@@ -163,7 +160,7 @@ class ClipGPTTrainer(BaseTrainer):
                 unwrapped_model = self.accelerator.unwrap_model(model)
                 save_step_model(
                     unwrapped_model, self.optimizer, self.accelerator,
-                    epoch_num, step, Path(self.cfg.data.checkpoints_dir)
+                    epoch_num, step, Path(train_cfg.checkpoints_dir)
                 )
 
         return epoch_info
@@ -172,7 +169,7 @@ class ClipGPTTrainer(BaseTrainer):
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         save_step_model(
             unwrapped_model, self.optimizer, self.accelerator,
-            epoch_num, 'final', Path(self.cfg.data.checkpoints_dir)
+            epoch_num, 'final', Path(self.cfg.train.checkpoints_dir)
         )
 
 
