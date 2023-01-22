@@ -101,17 +101,18 @@ class ClipGPT(nn.Module):
             param.requires_grad_(True)
 
     def training_parameters(self):
-        return (param for _, param in self.named_training_parameters())
-
-    def named_training_parameters(self):
         return itertools.chain(
-            self.gpt.get_input_embeddings().adapter.named_parameters(),  # type: ignore
-            self.gpt.get_output_embeddings().adapter.named_parameters(),  # type: ignore
+            self.gpt.get_input_embeddings().adapter.parameters(),  # type: ignore
+            self.gpt.get_output_embeddings().adapter.parameters(),  # type: ignore
         )
 
+    def named_training_parameters(self):
+        return ((name, param) for name, param in self.named_parameters() if param.requires_grad)
+
     def training_state_dict(self):
+        cfg_dict = {name: param for name, param in self.state_dict().items() if name.startswith('cfg')}
         params_dict = dict(self.named_training_parameters())
-        return asdict(self.cfg) | params_dict
+        return cfg_dict | params_dict
 
     def forward(self, *args, **kwargs):
         x = self.gpt(*args, **kwargs)

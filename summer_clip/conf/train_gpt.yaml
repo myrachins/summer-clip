@@ -43,7 +43,7 @@ data_loader:
     num_workers: 4
 
 accelerator:
-  fp16: true
+  {} # mixed_precision: fp16
 
 optim:
   weight_decay: 0.1
@@ -54,9 +54,16 @@ scheduler:
   name: cosine
   num_warmup_steps: 1000
   
-train:
-  num_train_epochs: 2
+training:
+  epochs_num: 2
   info_steps: 1
   gradient_accumulation_steps: 8
   eval_steps: 64
   checkpoints_dir: checkpoints/
+
+log:
+  calculate_every: 1
+
+exp:
+  project: train_clip_gpt
+  name: clip_gpt_v1

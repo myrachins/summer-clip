@@ -105,7 +105,7 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_scheduler(self):
         self.set_accelerator()
-        self.num_training_steps = self.cfg.train.num_train_epochs * len(self.loaders['train'])
+        self.num_training_steps = self.cfg.training.epochs_num * len(self.loaders['train'])
         sch_cfg = self.cfg.scheduler
         self.scheduler = get_scheduler(
             name=sch_cfg.name,
@@ -124,8 +124,8 @@ class ClipGPTTrainer(BaseTrainer):
         self.model = ClipGPT(ClipGPTConfig(**self.cfg.clip_gpt), clip_model.token_embedding, gpt_model)
 
     def train_epoch(self, epoch_num, epoch_info):
-        train_cfg = self.cfg.train
-        self.accelerator.print(f'Running epoch {epoch_num} / {train_cfg.num_train_epochs}...')
+        train_cfg = self.cfg.training
+        self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
         model = self.model.train()
         completed_steps = 0
 
@@ -169,7 +169,7 @@ class ClipGPTTrainer(BaseTrainer):
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         save_step_model(
             unwrapped_model, self.optimizer, self.accelerator,
-            epoch_num, 'final', Path(self.cfg.train.checkpoints_dir)
+            epoch_num, 'final', Path(self.cfg.training.checkpoints_dir)
         )
 
 
