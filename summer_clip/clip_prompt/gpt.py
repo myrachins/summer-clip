@@ -105,8 +105,8 @@ class ClipGPT(nn.Module):
 
     def named_training_parameters(self):
         return itertools.chain(
-            self.gpt.get_input_embeddings().adapter.named_parameters(),
-            self.gpt.get_output_embeddings().adapter.named_parameters(),
+            self.gpt.get_input_embeddings().adapter.named_parameters(),  # type: ignore
+            self.gpt.get_output_embeddings().adapter.named_parameters(),  # type: ignore
         )
 
     def training_state_dict(self):

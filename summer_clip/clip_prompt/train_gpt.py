@@ -15,8 +15,9 @@ from tqdm import tqdm
 from accelerate import Accelerator
 from datasets.load import load_dataset
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data.dataset import Dataset
 from torch.utils.data.dataloader import DataLoader
+from datasets.arrow_dataset import Dataset
+from transformers import DataCollatorForLanguageModeling
 from transformers import CLIPTokenizer, AutoModelForCausalLM, get_scheduler
 
 from summer_clip.clip_prompt.gpt import ClipGPT, ClipGPTConfig
@@ -34,6 +35,15 @@ def save_step_model(model: ClipGPT, optimizer: torch.optim.Optimizer, accelerato
 
     save_data(model.training_state_dict(), 'model')
     save_data(optimizer.state_dict(), 'optimizer')
+
+
+def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int, text_column: str):
+    def tokenization(example):
+        texts = ["<|startoftext|>" + text for text in example[text_column]]
+        return tokenizer(texts, add_special_tokens=False, truncation=True, max_length=max_length)
+
+    encodings = dataset.map(tokenization, batched=True, remove_columns=dataset.column_names)
+    return encodings
 
 
 # The following code is based on the HuggingFace articles:
@@ -71,18 +81,24 @@ def evaluate(model: ClipGPT, accelerator: Accelerator, eval_dataloader: DataLoad
 
 class ClipGPTTrainer(BaseTrainer):
     def setup_dataset(self):
-        self.train_dataset = load_dataset(**self.cfg.dataset.train_dataset)
-        self.val_dataset = load_dataset(**self.cfg.dataset.val_dataset)
+        self.tokenizer = CLIPTokenizer.from_pretrained(self.cfg.clip.tokenizer_id)
+
+        train_dataset: Dataset = load_dataset(**self.cfg.dataset.train.dataset_name)  # type: ignore
+        self.train_dataset = tokenize_dataset(
+            train_dataset, self.tokenizer, self.cfg.dataset.train.max_length, self.cfg.dataset.train.text_column
+        )
+        val_dataset: Dataset = load_dataset(**self.cfg.dataset.val.dataset_name)  # type: ignore
+        self.val_dataset = tokenize_dataset(
+            val_dataset, self.tokenizer, self.cfg.dataset.val.max_length, self.cfg.dataset.val.text_column
+        )
 
     def setup_loaders(self):
         ld_cfg = self.cfg.data_loader
+        collator = DataCollatorForLanguageModeling(self.tokenizer, mlm=False)
         self.loaders = {
-            'train': DataLoader(self.train_dataset[ld_cfg.train.text_field], **ld_cfg.train.kwargs),
-            'val': DataLoader(self.val_dataset[ld_cfg.val.text_field], **ld_cfg.val.kwargs)
+            'train': DataLoader(self.train_dataset, collate_fn=collator, **ld_cfg.train),  # type: ignore
+            'val': DataLoader(self.val_dataset, collate_fn=collator, **ld_cfg.val)  # type: ignore
         }
-
-    # def setup_loss(self):
-    #     self.loss = nn.CrossEntropyLoss()
 
     def set_accelerator(self):
         self.accelerator = Accelerator(**self.cfg.accelerator)
@@ -119,7 +135,7 @@ class ClipGPTTrainer(BaseTrainer):
         for step, batch in tqdm(
             enumerate(self.loaders['train'], start=1), disable=not self.accelerator.is_local_main_process
         ):
-            loss = model(batch["input_ids"]).loss
+            loss = model(**batch).loss
             if step % train_cfg.eval_steps == 0:
                 self.logger.exp_logger.log({
                     "lr": self.scheduler.get_lr(),
