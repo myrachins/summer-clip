@@ -42,9 +42,6 @@ data_loader:
     pin_memory: true
     num_workers: 4
 
-accelerator:
-  {} # mixed_precision: fp16
-
 optim:
   weight_decay: 0.1
   adamw_kwargs:
@@ -57,8 +54,9 @@ scheduler:
 training:
   epochs_num: 2
   info_steps: 1
-  gradient_accumulation_steps: 8
-  eval_steps: 64
+  gradient_accumulation_steps: 4
+  eval_steps: 100
+  clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/
 
 log:

@@ -97,7 +97,7 @@ class ClipGPTTrainer(BaseTrainer):
         }
 
     def set_accelerator(self):
-        self.accelerator = Accelerator(**self.cfg.accelerator)
+        self.accelerator = Accelerator()
         self.model, self.optimizer, self.loaders['train'], self.loaders['val'] = self.accelerator.prepare(
             self.model, self.optimizer, self.loaders['train'], self.loaders['val']
         )
@@ -156,7 +156,7 @@ class ClipGPTTrainer(BaseTrainer):
                 })
                 model.train()
                 self.accelerator.wait_for_everyone()
-                unwrapped_model = self.accelerator.unwrap_model(model)
+                unwrapped_model: ClipGPT = self.accelerator.unwrap_model(model)  # type: ignore
                 save_step_model(
                     unwrapped_model, self.optimizer, self.scheduler,
                     self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
@@ -165,7 +165,7 @@ class ClipGPTTrainer(BaseTrainer):
         return epoch_info
 
     def save_epoch_model(self, epoch_num):
-        unwrapped_model = self.accelerator.unwrap_model(self.model)
+        unwrapped_model: ClipGPT = self.accelerator.unwrap_model(self.model)  # type: ignore
         save_step_model(
             unwrapped_model, self.optimizer, self.scheduler,
             self.accelerator, epoch_num, 'final', Path(self.cfg.training.checkpoints_dir)
