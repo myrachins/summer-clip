@@ -2,7 +2,7 @@ import itertools
 import typing as tp
 from dataclasses import dataclass, asdict
 
-import torch
+import torch.nn.functional as F
 from torch import nn
 from transformers import GPT2LMHeadModel, GPT2Config
 
@@ -37,13 +37,12 @@ class AdapterEmb(nn.Module):
 class AdapterLMHead(nn.Module):
     def __init__(self, emb: nn.Embedding, adapter: Adapter) -> None:
         super().__init__()
-        self.lm_head = nn.Linear(emb.embedding_dim, emb.num_embeddings, bias=False)
-        self.lm_head.weight = emb.weight
+        self.lm_head = nn.Parameter(emb.weight)
         self.adapter = adapter
 
     def forward(self, x):
-        x = self.lm_head(x)
-        x = self.adapter(x)
+        lm_head = self.adapter(self.lm_head)
+        x = F.linear(x, lm_head)
         return x
 
 

@@ -1,13 +1,12 @@
 import typing as tp
 from pathlib import Path
-from copy import copy
 
 import torch
 import torch.utils
-import torch.optim
 import clip
 import hydra
 from torch import nn
+from torch import optim
 from tqdm import tqdm
 from accelerate import Accelerator
 from datasets.load import load_dataset
@@ -21,8 +20,8 @@ from summer_clip.clip_prompt.gpt import ClipGPT, ClipGPTConfig
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 
 
-def save_step_model(model: ClipGPT, optimizer: torch.optim.Optimizer, accelerator: Accelerator,
-                    epoch_num: int, step: int | str, checkpoints_dir: Path) -> None:
+def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler._LRScheduler,
+                    accelerator: Accelerator, epoch_num: int, step: int | str, checkpoints_dir: Path) -> None:
     step_dir = checkpoints_dir / f'epoch_{epoch_num}' / f'step_{step}'
     step_dir.mkdir(parents=True, exist_ok=True)
 
@@ -32,6 +31,7 @@ def save_step_model(model: ClipGPT, optimizer: torch.optim.Optimizer, accelerato
 
     save_data(model.training_state_dict(), 'model')
     save_data(optimizer.state_dict(), 'optimizer')
+    save_data(scheduler.state_dict(), 'scheduler')
 
 
 def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int, text_column: str):
@@ -65,10 +65,9 @@ def evaluate(model: ClipGPT, accelerator: Accelerator, eval_dataloader: DataLoad
     model.eval()
     losses = []
     for batch in tqdm(eval_dataloader, disable=not accelerator.is_local_main_process):
-        with torch.no_grad():
-            outputs = model(batch["input_ids"], labels=batch["input_ids"])
+        outputs = model(**batch)
         losses.append(accelerator.gather(outputs.loss))
-    loss = torch.mean(torch.cat(losses))
+    loss = torch.mean(torch.stack(losses))
     try:
         perplexity = torch.exp(loss).item()
     except OverflowError:
@@ -116,7 +115,7 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_optimizer(self):
         params = get_grouped_params(self.model, weight_decay=self.cfg.optim.weight_decay)
-        self.optimizer = torch.optim.AdamW(params, **self.cfg.optim.adamw_kwargs)
+        self.optimizer = optim.AdamW(params, **self.cfg.optim.adamw_kwargs)
 
     def setup_model(self):
         clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
@@ -129,8 +128,8 @@ class ClipGPTTrainer(BaseTrainer):
         model = self.model.train()
         completed_steps = 0
 
-        for step, batch in tqdm(
-            enumerate(self.loaders['train'], start=1), disable=not self.accelerator.is_local_main_process
+        for step, batch in enumerate(
+            tqdm(self.loaders['train'], disable=not self.accelerator.is_local_main_process), start=1
         ):
             loss = model(**batch).loss
             if step % train_cfg.info_steps == 0:
@@ -138,12 +137,12 @@ class ClipGPTTrainer(BaseTrainer):
                     "lr": self.scheduler.get_lr(),
                     "samples": step * batch["input_ids"].shape[0],
                     "steps": completed_steps,
-                    "loss/train": loss.item() * train_cfg.gradient_accumulation_steps,
+                    "loss/train": loss.item()
                 })
             loss = loss / train_cfg.gradient_accumulation_steps
             self.accelerator.backward(loss)
             if step % train_cfg.gradient_accumulation_steps == 0:
-                self.accelerator.clip_grad_norm_(self.model.training_parameters(), 1.0)
+                self.accelerator.clip_grad_norm_(self.model.training_parameters(), train_cfg.clip_grad_norm)
                 self.optimizer.step()
                 self.scheduler.step()
                 self.optimizer.zero_grad()
@@ -159,8 +158,8 @@ class ClipGPTTrainer(BaseTrainer):
                 self.accelerator.wait_for_everyone()
                 unwrapped_model = self.accelerator.unwrap_model(model)
                 save_step_model(
-                    unwrapped_model, self.optimizer, self.accelerator,
-                    epoch_num, step, Path(train_cfg.checkpoints_dir)
+                    unwrapped_model, self.optimizer, self.scheduler,
+                    self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
                 )
 
         return epoch_info
@@ -168,8 +167,8 @@ class ClipGPTTrainer(BaseTrainer):
     def save_epoch_model(self, epoch_num):
         unwrapped_model = self.accelerator.unwrap_model(self.model)
         save_step_model(
-            unwrapped_model, self.optimizer, self.accelerator,
-            epoch_num, 'final', Path(self.cfg.training.checkpoints_dir)
+            unwrapped_model, self.optimizer, self.scheduler,
+            self.accelerator, epoch_num, 'final', Path(self.cfg.training.checkpoints_dir)
         )
 
 
