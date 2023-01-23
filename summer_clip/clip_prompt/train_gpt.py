@@ -96,59 +96,62 @@ class ClipGPTTrainer(BaseTrainer):
             'val': DataLoader(self.val_dataset, collate_fn=collator, **ld_cfg.val)  # type: ignore
         }
 
-    def set_accelerator(self):
-        self.accelerator = Accelerator()
-        self.model, self.optimizer, self.loaders['train'], self.loaders['val'] = self.accelerator.prepare(
-            self.model, self.optimizer, self.loaders['train'], self.loaders['val']
-        )
-
-    def setup_scheduler(self):
-        self.set_accelerator()
-        self.num_training_steps = self.cfg.training.epochs_num * len(self.loaders['train'])
-        sch_cfg = self.cfg.scheduler
-        self.scheduler = get_scheduler(
-            name=sch_cfg.name,
-            optimizer=self.optimizer,
-            num_warmup_steps=sch_cfg.num_warmup_steps,
-            num_training_steps=self.num_training_steps
-        )
-
-    def setup_optimizer(self):
-        params = get_grouped_params(self.model, weight_decay=self.cfg.optim.weight_decay)
-        self.optimizer = optim.AdamW(params, **self.cfg.optim.adamw_kwargs)
-
     def setup_model(self):
         clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
         gpt_model = AutoModelForCausalLM.from_pretrained(self.cfg.gpt.model_id)
         self.model = ClipGPT(ClipGPTConfig(**self.cfg.clip_gpt), clip_model.token_embedding, gpt_model)
 
+    def setup_optimizer(self):
+        params = get_grouped_params(self.model, weight_decay=self.cfg.optim.weight_decay)
+        self.optimizer = optim.AdamW(params, **self.cfg.optim.adamw_kwargs)
+
+    def setup_scheduler(self):
+        sch_cfg = self.cfg.scheduler
+        num_training_steps = self.cfg.training.epochs_num * len(self.loaders['train'])
+        num_warmup_steps = int(num_training_steps * sch_cfg.warmup_part)
+        self.scheduler = get_scheduler(
+            name=sch_cfg.name,
+            optimizer=self.optimizer,
+            num_warmup_steps=num_warmup_steps,
+            num_training_steps=num_training_steps
+        )
+
+    def setup_accelerator(self):
+        self.accelerator = Accelerator(**self.cfg.accelerator)
+        self.model, self.optimizer, self.loaders['train'], self.loaders['val'], self.scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.loaders['train'], self.loaders['val'], self.scheduler
+        )
+
+    def setup(self):
+        super().setup()
+        self.setup_accelerator()
+
     def train_epoch(self, epoch_num, epoch_info):
         train_cfg = self.cfg.training
         self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
         model = self.model.train()
-        completed_steps = 0
 
         for step, batch in enumerate(
             tqdm(self.loaders['train'], disable=not self.accelerator.is_local_main_process), start=1
         ):
-            loss = model(**batch).loss
-            if step % train_cfg.info_steps == 0:
-                self.logger.exp_logger.log({
-                    "lr": self.scheduler.get_lr(),
-                    "samples": step * batch["input_ids"].shape[0],
-                    "steps": completed_steps,
-                    "loss/train": loss.item()
-                })
-            loss = loss / train_cfg.gradient_accumulation_steps
-            self.accelerator.backward(loss)
-            if step % train_cfg.gradient_accumulation_steps == 0:
-                self.accelerator.clip_grad_norm_(self.model.training_parameters(), train_cfg.clip_grad_norm)
+            with self.accelerator.accumulate(model):
+                loss = model(**batch).loss
+                self.accelerator.backward(loss)
+                self.accelerator.clip_grad_norm_(
+                    self.model.training_parameters(), train_cfg.clip_grad_norm
+                )
                 self.optimizer.step()
                 self.scheduler.step()
                 self.optimizer.zero_grad()
-                completed_steps += 1
 
-            if step % (train_cfg.eval_steps * train_cfg.gradient_accumulation_steps) == 0:
+            if step % train_cfg.info_steps == 0:
+                self.logger.exp_logger.log({
+                    "lr": self.scheduler.get_last_lr()[0],
+                    "samples": step * batch["input_ids"].shape[0],
+                    "loss/train": loss.item()
+                })
+
+            if step % train_cfg.eval_steps == 0:
                 self.accelerator.print('Evaluating and saving...')
                 eval_loss, perplexity = evaluate(self.model, self.accelerator, self.loaders['val'])
                 self.logger.exp_logger.log({

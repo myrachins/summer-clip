@@ -32,12 +32,12 @@ dataset:
 
 data_loader:
   train:
-    batch_size: 512
+    batch_size: 64
     shuffle: true
     pin_memory: true
     num_workers: 4
   val:
-    batch_size: 512
+    batch_size: 64
     shuffle: false
     pin_memory: true
     num_workers: 4
@@ -49,12 +49,14 @@ optim:
 
 scheduler:
   name: cosine
-  num_warmup_steps: 1000
-  
-training:
-  epochs_num: 2
-  info_steps: 1
+  warmup_part: 0.05
+
+accelerator:
   gradient_accumulation_steps: 4
+
+training:
+  epochs_num: 15
+  info_steps: 1
   eval_steps: 100
   clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/

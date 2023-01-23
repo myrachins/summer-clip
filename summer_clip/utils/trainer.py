@@ -62,6 +62,7 @@ class BaseTrainer:
         self.setup_loaders()
         self.setup_model()
         self.setup_optimizer()
+        self.setup_scheduler()
         self.setup_loss()
 
     def compute_metrics(self, epoch_num, epoch_info):
@@ -76,22 +77,15 @@ class BaseTrainer:
     def save_epoch_model(self, epoch_num):
         pass
 
-    def scheduler_step(self):
-        if hasattr(self, 'scheduler') and self.scheduler is not None:  # type: ignore
-            self.scheduler.step()  # type: ignore
-
     def train_loop(self):
         training_time_log = log_utils.TimeLog(
             self.logger, self.cfg.training.epochs_num + 1, event="training"
         )
-        self.setup_scheduler()
         for epoch_num in range(1, self.cfg.training.epochs_num + 1):
             epoch_info = log_utils.StreamingMeans()
             self.train_mode()
             with log_utils.Timer(epoch_info, "epoch_train"):
                 epoch_info = self.train_epoch(epoch_num, epoch_info)
-
-            self.scheduler_step()
 
             self.eval_mode()
             with log_utils.Timer(epoch_info, "epoch_val"):
