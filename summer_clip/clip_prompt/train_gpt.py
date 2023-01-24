@@ -130,6 +130,7 @@ class ClipGPTTrainer(BaseTrainer):
         train_cfg = self.cfg.training
         self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
         model = self.model.train()
+        completed_steps = 0
 
         for step, batch in enumerate(
             tqdm(self.loaders['train'], disable=not self.accelerator.is_local_main_process), start=1
@@ -137,9 +138,11 @@ class ClipGPTTrainer(BaseTrainer):
             with self.accelerator.accumulate(model):
                 loss = model(**batch).loss
                 self.accelerator.backward(loss)
-                self.accelerator.clip_grad_norm_(
-                    self.model.training_parameters(), train_cfg.clip_grad_norm
-                )
+                if self.accelerator.sync_gradients:
+                    self.accelerator.clip_grad_norm_(
+                        self.model.training_parameters(), train_cfg.clip_grad_norm
+                    )
+                    completed_steps += 1
                 self.optimizer.step()
                 self.scheduler.step()
                 self.optimizer.zero_grad()
@@ -148,6 +151,7 @@ class ClipGPTTrainer(BaseTrainer):
                 self.logger.exp_logger.log({
                     "lr": self.scheduler.get_last_lr()[0],
                     "samples": step * batch["input_ids"].shape[0],
+                    "steps": completed_steps,
                     "loss/train": loss.item()
                 })
 
