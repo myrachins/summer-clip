@@ -1,0 +1,19 @@
+defaults:
+  - hydra_setup
+  - meta_setup
+  - _self_
+
+clip:
+  tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
+
+dataset:
+  dataset:
+    path: openwebtext
+    split: train
+  max_length: 80
+  text_column: text
+  num_proc: 8
+
+save_kwargs:
+  dataset_path: ${dataset.dataset.path}
+  num_proc: ${dataset.num_proc}
