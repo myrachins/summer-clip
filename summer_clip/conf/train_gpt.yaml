@@ -17,9 +17,8 @@ clip_gpt:
 dataset:
   train:
     dataset:
-      path: wikitext
-      name: wikitext-2-raw-v1
-      split: validation
+      path: openwebtext
+      split: train
     max_length: 80
     text_column: text
   val:
@@ -32,15 +31,15 @@ dataset:
 
 data_loader:
   train:
-    batch_size: 64
+    batch_size: 56
     shuffle: true
     pin_memory: true
-    num_workers: 4
+    num_workers: 8
   val:
-    batch_size: 64
+    batch_size: 56
     shuffle: false
     pin_memory: true
-    num_workers: 4
+    num_workers: 8
 
 optim:
   weight_decay: 0.1
@@ -57,7 +56,7 @@ accelerator:
 training:
   epochs_num: 15
   info_steps: 1
-  eval_steps: 100
+  eval_steps: 1400
   clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/
 
