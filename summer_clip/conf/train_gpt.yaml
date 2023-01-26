@@ -1,26 +1,25 @@
 defaults:
   - hydra_setup
   - meta_setup
+  - saved_paths: train_gpt
   - _self_
 
 clip:
   tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
-  model_name: RN50
-
-gpt:
-  model_id: gpt2-large
 
 clip_gpt:
-  adap_emb_hid_dim: 256
-  adap_head_hid_dim: null  # tied adapter with emb layer
+  class_path: summer_clip.clip_prompt.gpt.ClipGPT
+  gpt_model_id: gpt2-large
+  clip_model_name: RN50
+  adapters:
+    emb_hid_dim: 256
+    head_hid_dim: null  # tied adapter with emb layer
 
 dataset:
   train:
     dataset:
-      path: openwebtext
-      split: train
-    max_length: 80
-    text_column: text
+      dataset_path: ${saved_paths.tokenized_datasets.openwebtext}
+    subpart: 0.01  # if null, all is taken
   val:
     dataset:
       path: wikitext

@@ -7,7 +7,8 @@ from datasets.arrow_dataset import Dataset
 from summer_clip.utils.trainer import set_random_state
 
 
-def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int, text_column: str, num_proc: tp.Optional[int]) -> Dataset:
+def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int,
+                     text_column: str, num_proc: tp.Optional[int] = None) -> Dataset:
     def tokenization(example):
         texts = ["<|startoftext|>" + text for text in example[text_column]]
         return tokenizer(texts, add_special_tokens=False, truncation=True, max_length=max_length)

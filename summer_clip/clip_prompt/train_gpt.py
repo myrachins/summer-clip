@@ -3,21 +3,20 @@ from pathlib import Path
 
 import torch
 import torch.utils
-import clip
 import hydra
-from torch import nn
 from torch import optim
 from tqdm import tqdm
 from accelerate import Accelerator
-from datasets.load import load_dataset
+from datasets.load import load_dataset, load_from_disk
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
 from datasets.arrow_dataset import Dataset
 from transformers import DataCollatorForLanguageModeling
-from transformers import CLIPTokenizer, AutoModelForCausalLM, get_scheduler
+from transformers import CLIPTokenizer, get_scheduler
 
-from summer_clip.clip_prompt.gpt import ClipGPT, ClipGPTConfig
+from summer_clip.clip_prompt.gpt import ClipGPT, load_model
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
+from summer_clip.clip_prompt.tokenize_dataset import tokenize_dataset
 
 
 def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler._LRScheduler,
@@ -32,15 +31,7 @@ def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim
     save_data(model.training_state_dict(), 'model')
     save_data(optimizer.state_dict(), 'optimizer')
     save_data(scheduler.state_dict(), 'scheduler')
-
-
-def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int, text_column: str):
-    def tokenization(example):
-        texts = ["<|startoftext|>" + text for text in example[text_column]]
-        return tokenizer(texts, add_special_tokens=False, truncation=True, max_length=max_length)
-
-    encodings = dataset.map(tokenization, batched=True, remove_columns=dataset.column_names)
-    return encodings
+    OmegaConf.save(model.cfg, step_dir / 'model_cfg.yaml')
 
 
 # The following code is based on the HuggingFace articles:
@@ -78,14 +69,17 @@ def evaluate(model: ClipGPT, accelerator: Accelerator, eval_dataloader: DataLoad
 class ClipGPTTrainer(BaseTrainer):
     def setup_dataset(self):
         self.tokenizer = CLIPTokenizer.from_pretrained(self.cfg.clip.tokenizer_id)
+        dt_cfg = self.cfg.dataset
 
-        train_dataset: Dataset = load_dataset(**self.cfg.dataset.train.dataset)  # type: ignore
-        self.train_dataset = tokenize_dataset(
-            train_dataset, self.tokenizer, self.cfg.dataset.train.max_length, self.cfg.dataset.train.text_column
-        )
-        val_dataset: Dataset = load_dataset(**self.cfg.dataset.val.dataset)  # type: ignore
+        train_dataset: Dataset = load_from_disk(**dt_cfg.train.dataset)  # type: ignore
+        if dt_cfg.train.subpart is not None:
+            train_dataset = train_dataset.shuffle(seed=self.cfg.meta.random_state)
+            train_part = int(dt_cfg.train.subpart * len(train_dataset))
+            train_dataset = train_dataset[:train_part]  # type: ignore
+        self.train_dataset = train_dataset
+        val_dataset: Dataset = load_dataset(**dt_cfg.val.dataset)  # type: ignore
         self.val_dataset = tokenize_dataset(
-            val_dataset, self.tokenizer, self.cfg.dataset.val.max_length, self.cfg.dataset.val.text_column
+            val_dataset, self.tokenizer, dt_cfg.val.max_length, dt_cfg.val.text_column
         )
 
     def setup_loaders(self):
@@ -97,9 +91,7 @@ class ClipGPTTrainer(BaseTrainer):
         }
 
     def setup_model(self):
-        clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
-        gpt_model = AutoModelForCausalLM.from_pretrained(self.cfg.gpt.model_id)
-        self.model = ClipGPT(ClipGPTConfig(**self.cfg.clip_gpt), clip_model.token_embedding, gpt_model)
+        self.model = load_model(self.cfg.clip_gpt)
 
     def setup_optimizer(self):
         params = get_grouped_params(self.model, weight_decay=self.cfg.optim.weight_decay)
