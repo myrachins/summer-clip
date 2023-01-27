@@ -10,7 +10,7 @@ from summer_clip.utils.trainer import set_random_state
 def tokenize_dataset(dataset: Dataset, tokenizer: CLIPTokenizer, max_length: int,
                      text_column: str, num_proc: tp.Optional[int] = None) -> Dataset:
     def tokenization(example):
-        texts = ["<|startoftext|>" + text for text in example[text_column]]
+        texts = [tokenizer.bos_token + text for text in example[text_column]]
         return tokenizer(texts, add_special_tokens=False, truncation=True, max_length=max_length)
 
     encodings = dataset.map(tokenization, batched=True, num_proc=num_proc, remove_columns=dataset.column_names)

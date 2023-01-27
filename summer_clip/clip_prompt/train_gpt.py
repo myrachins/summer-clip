@@ -38,6 +38,7 @@ def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim
 # 1) https://huggingface.co/course/chapter7/6
 # 2) https://huggingface.co/docs/transformers/main/en/perf_train_gpu_one
 
+
 def get_grouped_params(model: ClipGPT, weight_decay: float, no_decay: tuple[str, ...] = ("bias", "LayerNorm.weight")):
     params_with_wd, params_without_wd = [], []
     for n, p in model.named_training_parameters():
@@ -59,11 +60,18 @@ def evaluate(model: ClipGPT, accelerator: Accelerator, eval_dataloader: DataLoad
         outputs = model(**batch)
         losses.append(accelerator.gather(outputs.loss))
     loss = torch.mean(torch.stack(losses))
-    try:
-        perplexity = torch.exp(loss).item()
-    except OverflowError:
-        perplexity = float("inf")
-    return loss.item(), perplexity
+    perp = loss.exp()
+    return loss.item(), perp.item()
+
+
+class WikiFilter:
+    def __init__(self, text_column: str) -> None:
+        self.text_column = text_column
+
+    def is_valid(self, example: dict[str, tp.Any]) -> bool:
+        text = example[self.text_column]
+        is_invalid = (text == '' or text.startswith(' =') or text.endswith('= \n'))
+        return not is_invalid
 
 
 class ClipGPTTrainer(BaseTrainer):
@@ -75,9 +83,14 @@ class ClipGPTTrainer(BaseTrainer):
         if dt_cfg.train.subpart is not None:
             train_dataset = train_dataset.shuffle(seed=self.cfg.meta.random_state)
             train_part = int(dt_cfg.train.subpart * len(train_dataset))
-            train_dataset = train_dataset[:train_part]  # type: ignore
+            train_dataset = train_dataset.select(range(train_part))
         self.train_dataset = train_dataset
         val_dataset: Dataset = load_dataset(**dt_cfg.val.dataset)  # type: ignore
+        val_filter = hydra.utils.instantiate(dt_cfg.val.filter)
+        val_dataset = val_dataset.filter(val_filter.is_valid)
+        print("Len1", len(val_dataset.filter(lambda example: example['text'].endswith('= \n'))))
+        print("Len2", len(val_dataset.filter(lambda example: example['text'].startswith(' ='))))
+        print("Len3", len(val_dataset))
         self.val_dataset = tokenize_dataset(
             val_dataset, self.tokenizer, dt_cfg.val.max_length, dt_cfg.val.text_column
         )
@@ -122,6 +135,10 @@ class ClipGPTTrainer(BaseTrainer):
         train_cfg = self.cfg.training
         self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
         model = self.model.train()
+        eval_steps = range(
+            len(self.loaders['train']), 0,
+            -(len(self.loaders['train']) // train_cfg.evals_per_epoch)
+        )[:train_cfg.evals_per_epoch]
         completed_steps = 0
 
         for step, batch in enumerate(
@@ -147,28 +164,22 @@ class ClipGPTTrainer(BaseTrainer):
                     "loss/train": loss.item()
                 })
 
-            if step % train_cfg.eval_steps == 0:
-                self.accelerator.print('Evaluating and saving...')
+            if step in eval_steps:
+                self.accelerator.wait_for_everyone()
+                self.accelerator.print('\nEvaluating and saving...')
                 eval_loss, perplexity = evaluate(self.model, self.accelerator, self.loaders['val'])
                 self.logger.exp_logger.log({
                     "loss/eval": eval_loss, "metrics/perplexity": perplexity
                 })
                 model.train()
-                self.accelerator.wait_for_everyone()
-                unwrapped_model: ClipGPT = self.accelerator.unwrap_model(model)  # type: ignore
-                save_step_model(
-                    unwrapped_model, self.optimizer, self.scheduler,
-                    self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
-                )
+                if self.accelerator.is_main_process:
+                    unwrapped_model: ClipGPT = self.accelerator.unwrap_model(model)  # type: ignore
+                    save_step_model(
+                        unwrapped_model, self.optimizer, self.scheduler,
+                        self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
+                    )
 
         return epoch_info
-
-    def save_epoch_model(self, epoch_num):
-        unwrapped_model: ClipGPT = self.accelerator.unwrap_model(self.model)  # type: ignore
-        save_step_model(
-            unwrapped_model, self.optimizer, self.scheduler,
-            self.accelerator, epoch_num, 'final', Path(self.cfg.training.checkpoints_dir)
-        )
 
 
 @hydra.main(config_path='../conf', config_name='train_gpt', version_base='1.1')

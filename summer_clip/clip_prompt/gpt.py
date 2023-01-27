@@ -53,20 +53,18 @@ class ClipGPT(nn.Module):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        self.clip_emb = self._create_clip_emb(cfg)
-        self.gpt = self._create_gpt(cfg)
+        self.clip_emb = self.create_clip_emb()
+        self.gpt = self.create_gpt()
 
         self._add_adapters()
         self._set_grads()
 
-    @staticmethod
-    def _create_clip_emb(cfg):
-        clip_model, _ = clip.load(cfg.clip_model_name, device='cpu', jit=False)
+    def create_clip_emb(self):
+        clip_model, _ = clip.load(self.cfg.clip_model_name, device='cpu', jit=False)
         return clip_model.token_embedding
 
-    @staticmethod
-    def _create_gpt(cfg):
-        return AutoModelForCausalLM.from_pretrained(cfg.gpt_model_id)
+    def create_gpt(self):
+        return AutoModelForCausalLM.from_pretrained(self.cfg.gpt_model_id)
 
     def _add_adapters(self):
         clip_emb_dim = self.clip_emb.embedding_dim
@@ -91,17 +89,18 @@ class ClipGPT(nn.Module):
         for param in self.training_parameters():
             param.requires_grad_(True)
 
+    def _is_train_param(self, param_name: str) -> bool:
+        train_params = ('gpt.transformer.wte.adapter', 'gpt.lm_head.adapter')
+        return any(param_name.startswith(train_param) for train_param in train_params)
+
     def training_parameters(self):
-        return itertools.chain(
-            self.gpt.get_input_embeddings().adapter.parameters(),  # type: ignore
-            self.gpt.get_output_embeddings().adapter.parameters(),  # type: ignore
-        )
+        return (param for _, param in self.named_training_parameters())
 
     def named_training_parameters(self):
-        return ((name, param) for name, param in self.named_parameters() if param.requires_grad)
+        return ((name, param) for name, param in self.named_parameters() if self._is_train_param(name))
 
     def training_state_dict(self):
-        return dict(self.named_training_parameters())
+        return {name: param for name, param in self.state_dict().items() if self._is_train_param(name)}
 
     def forward(self, *args, **kwargs):
         x = self.gpt(*args, **kwargs)
@@ -121,18 +120,6 @@ def load_pretrained(model_cfg: DictConfig, training_state_dict: dict[str, tp.Any
 
 
 class ClipGPTFull(ClipGPT):
-    def _set_grads(self):
-        for param in self.parameters():
-            param.requires_grad_(True)
-        for param in self._non_training_parameters():
-            param.requires_grad_(False)
-
-    def _non_training_parameters(self):
-        return itertools.chain(
-            self.clip_emb.parameters(),
-            self.gpt.get_input_embeddings().emb.parameters(),  # type: ignore
-            self.gpt.get_output_embeddings().lm_head.parameters(),  # type: ignore
-        )
-
-    def training_parameters(self):
-        return (param for _, param in self.named_training_parameters())
+    def _is_train_param(self, param_name: str) -> bool:
+        no_train_params = ('clip_emb', 'gpt.transformer.wte.emb', 'gpt.lm_head.lm_head')
+        return not any(param_name.startswith(no_train_param) for no_train_param in no_train_params)

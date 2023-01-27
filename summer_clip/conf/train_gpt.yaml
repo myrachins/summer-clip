@@ -19,7 +19,7 @@ dataset:
   train:
     dataset:
       dataset_path: ${saved_paths.tokenized_datasets.openwebtext}
-    subpart: 0.01  # if null, all is taken
+    subpart: 0.001  # if null, all is taken
   val:
     dataset:
       path: wikitext
@@ -27,6 +27,9 @@ dataset:
       split: test
     max_length: 80
     text_column: text
+    filter:
+      _target_: summer_clip.clip_prompt.train_gpt.WikiFilter
+      text_column: ${dataset.val.text_column}
 
 data_loader:
   train:
@@ -55,7 +58,7 @@ accelerator:
 training:
   epochs_num: 15
   info_steps: 1
-  eval_steps: 1400
+  evals_per_epoch: 5
   clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/
 
