@@ -19,7 +19,7 @@ dataset:
   train:
     dataset:
       dataset_path: ${saved_paths.tokenized_datasets.openwebtext}
-    subpart: 0.001  # if null, all is taken
+    subpart: 0.01  # if null, all is taken
   val:
     dataset:
       path: wikitext
@@ -56,7 +56,7 @@ accelerator:
   gradient_accumulation_steps: 4
 
 training:
-  epochs_num: 15
+  epochs_num: 10
   info_steps: 1
   evals_per_epoch: 5
   clip_grad_norm: 1.0

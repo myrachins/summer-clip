@@ -87,10 +87,7 @@ class ClipGPTTrainer(BaseTrainer):
         self.train_dataset = train_dataset
         val_dataset: Dataset = load_dataset(**dt_cfg.val.dataset)  # type: ignore
         val_filter = hydra.utils.instantiate(dt_cfg.val.filter)
-        val_dataset = val_dataset.filter(val_filter.is_valid)
-        print("Len1", len(val_dataset.filter(lambda example: example['text'].endswith('= \n'))))
-        print("Len2", len(val_dataset.filter(lambda example: example['text'].startswith(' ='))))
-        print("Len3", len(val_dataset))
+        val_dataset = val_dataset.filter(val_filter.is_valid, load_from_cache_file=False)
         self.val_dataset = tokenize_dataset(
             val_dataset, self.tokenizer, dt_cfg.val.max_length, dt_cfg.val.text_column
         )
