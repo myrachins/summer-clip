@@ -56,9 +56,9 @@ accelerator:
   gradient_accumulation_steps: 4
 
 training:
-  epochs_num: 10
+  epochs_num: 5
   info_steps: 1
-  evals_per_epoch: 5
+  evals_per_epoch: 2
   clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/
 
