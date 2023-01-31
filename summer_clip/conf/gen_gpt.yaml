@@ -28,13 +28,17 @@ data_loader:
   batch_size: 56
   shuffle: false
   pin_memory: true
-  num_workers: 4
+  num_workers: 2
 
 prompts:  # if null, no generation eval
   - I enjoy walking with my cute dog
-  # - A photo of a
-  # - A satellite photo of a
-  # - You wanna play? Let's
+  - You wanna play? Let's
+  - Obama was born in
+  - A photo of a
+  - A satellite photo of a
+  - A low resolution photo of the
+  - A blurry photo of the
+  - A tattoo of the
 
 generate:
   max_length: ${dataset.max_length}

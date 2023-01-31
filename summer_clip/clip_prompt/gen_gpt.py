@@ -53,10 +53,11 @@ def load_gpt_tokenizer(model_cfg_path: str) -> PreTrainedTokenizerBase:
 
 
 @torch.no_grad()
-def evaluate(model: nn.Module, val_loader: DataLoader) -> tuple[float, float]:
+def evaluate(model: nn.Module, val_loader: DataLoader, device: tp.Any) -> tuple[float, float]:
     model.eval()
     losses = []
     for batch in tqdm(val_loader):
+        batch = batch.to(device)
         outputs = model(**batch)
         losses.append(outputs.loss)
     loss = torch.mean(torch.stack(losses))
@@ -81,10 +82,12 @@ def evaluate_lm(model: tp.Any, tokenizer: CLIPTokenizer,
     val_loader = create_val_loader(cfg, tokenizer)
     model = model.to(cfg.meta.device)
     if val_loader is not None:
+        print('Perplexity eval...')
         res_cfg['eval'][model_name]['loss'], res_cfg['eval'][model_name]['ppl'] \
-            = evaluate(model, val_loader)  # type: ignore
+            = evaluate(model, val_loader, cfg.meta.device)  # type: ignore
     prompts = cfg.prompts
     if prompts is not None:
+        print('Prompts eval...')
         gen_texts = generate_texts(model, prompts, tokenizer, cfg)
         res_prompts = res_cfg.get('prompts', [dict(prompt=prompt) for prompt in prompts])
         for res_prompt, prompt_texts in zip(res_prompts, gen_texts):
@@ -107,6 +110,7 @@ def run_generator(cfg: DictConfig) -> None:
     res_cfg = create_inf_defaultdict()
     clip_tokenizer = CLIPTokenizer.from_pretrained(cfg.tokenizer.tokenizer_id)
     # Do not create separate var for the model. Otherwise GC can not free it before gpt
+    print('Evaluating ClipGPT...')
     evaluate_lm(
         load_pretrained_model(
             cfg.model.meta_cfg_path, cfg.model.state_dict_path, map_location=cfg.meta.device
@@ -114,6 +118,7 @@ def run_generator(cfg: DictConfig) -> None:
         clip_tokenizer, cfg, res_cfg, model_name='clip_gpt'
     )
     if cfg.eval.eval_gpt:
+        print('Evaluating GPT...')
         gpt_tokenizer = load_gpt_tokenizer(cfg.model.meta_cfg_path)
         gpt_tokenizer.pad_token = gpt_tokenizer.eos_token  # set pad token
         evaluate_lm(
@@ -121,6 +126,7 @@ def run_generator(cfg: DictConfig) -> None:
         )
     res_dict_cfg = convert_inf_defaultdict(res_cfg)
     OmegaConf.save(OmegaConf.create(res_dict_cfg), cfg.data.res_path)
+    print('Results were saved!')
 
 
 @hydra.main(config_path='../conf', config_name='gen_gpt', version_base='1.1')
