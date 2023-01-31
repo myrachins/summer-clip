@@ -34,17 +34,17 @@ def create_val_loader(cfg: DictConfig, tokenizer: CLIPTokenizer) -> DataLoader |
     return loader
 
 
-def load_pretrained_model(model_cfg_path: str, state_dict_path: str) -> ClipGPT:
+def load_pretrained_model(model_cfg_path: str, state_dict_path: str, map_location: tp.Any) -> ClipGPT:
     model_cfg = OmegaConf.load(model_cfg_path)
     assert isinstance(model_cfg, DictConfig)
-    state_dict = torch.load(state_dict_path)
+    state_dict = torch.load(state_dict_path, map_location=map_location)
     return load_pretrained(model_cfg, state_dict)
 
 
 def load_gpt(model_cfg_path: str) -> AutoModelForCausalLM:
     model_cfg = OmegaConf.load(model_cfg_path)
     model_cls = load_obj(model_cfg.class_path)
-    return model_cls.create_gpt()
+    return model_cls.create_gpt(model_cfg)
 
 
 def load_gpt_tokenizer(model_cfg_path: str) -> PreTrainedTokenizerBase:
@@ -65,12 +65,13 @@ def evaluate(model: nn.Module, val_loader: DataLoader) -> tuple[float, float]:
 
 
 def generate_texts(model: tp.Any, prompts: list[str], tokenizer: CLIPTokenizer, cfg: DictConfig) -> list[list[str]]:
-    inputs_ids = tokenize_texts(prompts, tokenizer, cfg.tokenizer.max_length)
+    model.eval()
+    input_texts = tokenize_texts(prompts, tokenizer, cfg.generate.max_length)
     gen_texts: list[list[str]] = []
-    for input_ids in inputs_ids:
-        input_ids = torch.tensor(input_ids).to(cfg.meta.device)
-        out_ids = model.generate(input_ids, **cfg.generate)
-        out_texts = [tokenizer.decode(out_ids[0], skip_special_tokens=False)]
+    for input_ids in input_texts['input_ids']:
+        input_ids = torch.tensor(input_ids).view(1, -1).to(cfg.meta.device)
+        out_ids = model.generate(input_ids, pad_token_id=tokenizer.pad_token_id, **cfg.generate.generate_kwargs)
+        out_texts = [tokenizer.decode(text_ids, skip_special_tokens=False) for text_ids in out_ids]
         gen_texts.append(out_texts)
     return gen_texts
 
@@ -95,12 +96,21 @@ def create_inf_defaultdict() -> defaultdict[tp.Any, tp.Any]:
     return defaultdict(create_inf_defaultdict)
 
 
+def convert_inf_defaultdict(dct: defaultdict[tp.Any, tp.Any]) -> dict[tp.Any, tp.Any]:
+    return {
+        key: (convert_inf_defaultdict(val) if isinstance(val, defaultdict) else val)
+        for key, val in dct.items()
+    }
+
+
 def run_generator(cfg: DictConfig) -> None:
     res_cfg = create_inf_defaultdict()
     clip_tokenizer = CLIPTokenizer.from_pretrained(cfg.tokenizer.tokenizer_id)
     # Do not create separate var for the model. Otherwise GC can not free it before gpt
     evaluate_lm(
-        load_pretrained_model(cfg.model.meta_cfg_path, cfg.model.state_dict_path).gpt,
+        load_pretrained_model(
+            cfg.model.meta_cfg_path, cfg.model.state_dict_path, map_location=cfg.meta.device
+        ).gpt,
         clip_tokenizer, cfg, res_cfg, model_name='clip_gpt'
     )
     if cfg.eval.eval_gpt:
@@ -109,7 +119,8 @@ def run_generator(cfg: DictConfig) -> None:
         evaluate_lm(
             load_gpt(cfg.model.meta_cfg_path), gpt_tokenizer, cfg, res_cfg, model_name='gpt'  # type: ignore
         )
-    OmegaConf.save(OmegaConf.create(res_cfg), cfg.data.res_path)
+    res_dict_cfg = convert_inf_defaultdict(res_cfg)
+    OmegaConf.save(OmegaConf.create(res_dict_cfg), cfg.data.res_path)
 
 
 @hydra.main(config_path='../conf', config_name='gen_gpt', version_base='1.1')

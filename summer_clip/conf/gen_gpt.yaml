@@ -1,0 +1,49 @@
+defaults:
+  - hydra_setup
+  - meta_setup
+  - _self_
+
+model:
+  meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-01-28/21-21-12/checkpoints/epoch_5/step_1432/model_cfg.yaml
+  state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-01-28/21-21-12/checkpoints/epoch_5/step_1432/model.ckpt
+
+tokenizer:
+  tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
+
+eval:
+  eval_gpt: true
+
+dataset:  # if null, no perplexity eval
+  dataset:
+    path: wikitext
+    name: wikitext-2-raw-v1
+    split: test
+  max_length: 80
+  text_column: text
+  filter:
+    _target_: summer_clip.clip_prompt.train_gpt.WikiFilter
+    text_column: ${dataset.text_column}
+
+data_loader:
+  batch_size: 56
+  shuffle: false
+  pin_memory: true
+  num_workers: 4
+
+prompts:  # if null, no generation eval
+  - I enjoy walking with my cute dog
+  # - A photo of a
+  # - A satellite photo of a
+  # - You wanna play? Let's
+
+generate:
+  max_length: ${dataset.max_length}
+  generate_kwargs:
+    do_sample: True
+    max_length: ${generate.max_length} 
+    top_k: 50
+    top_p: 0.95
+    num_return_sequences: 3
+
+data:
+  res_path: clip_gpt.yaml

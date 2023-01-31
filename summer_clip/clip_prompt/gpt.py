@@ -53,18 +53,20 @@ class ClipGPT(nn.Module):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
         self.cfg = cfg
-        self.clip_emb = self.create_clip_emb()
-        self.gpt = self.create_gpt()
+        self.clip_emb = self.create_clip_emb(cfg)
+        self.gpt = self.create_gpt(cfg)
 
         self._add_adapters()
         self._set_grads()
 
-    def create_clip_emb(self):
-        clip_model, _ = clip.load(self.cfg.clip_model_name, device='cpu', jit=False)
+    @staticmethod
+    def create_clip_emb(cfg):
+        clip_model, _ = clip.load(cfg.clip_model_name, device='cpu', jit=False)
         return clip_model.token_embedding
 
-    def create_gpt(self):
-        return AutoModelForCausalLM.from_pretrained(self.cfg.gpt_model_id)
+    @staticmethod
+    def create_gpt(cfg):
+        return AutoModelForCausalLM.from_pretrained(cfg.gpt_model_id)
 
     def _add_adapters(self):
         clip_emb_dim = self.clip_emb.embedding_dim
