@@ -19,7 +19,7 @@ from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_prompt.tokenize_dataset import tokenize_dataset
 
 
-def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler._LRScheduler,
+def save_step_model(model: ClipGPT | None, optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
                     accelerator: Accelerator, epoch_num: int, step: int | str, checkpoints_dir: Path) -> None:
     step_dir = checkpoints_dir / f'epoch_{epoch_num}' / f'step_{step}'
     step_dir.mkdir(parents=True, exist_ok=True)
@@ -28,10 +28,13 @@ def save_step_model(model: ClipGPT, optimizer: optim.Optimizer, scheduler: optim
         with open(step_dir / f'{data_name}.ckpt', 'wb') as f:
             accelerator.save(data, f)
 
-    save_data(model.training_state_dict(), 'model')
-    save_data(optimizer.state_dict(), 'optimizer')
-    save_data(scheduler.state_dict(), 'scheduler')
-    OmegaConf.save(model.cfg, step_dir / 'model_cfg.yaml')
+    if model is not None:
+        save_data(model.training_state_dict(), 'model')
+        OmegaConf.save(model.cfg, step_dir / 'model_cfg.yaml')
+    if optimizer is not None:
+        save_data(optimizer.state_dict(), 'optimizer')
+    if scheduler is not None:
+        save_data(scheduler.state_dict(), 'scheduler')
 
 
 # The following code is based on the HuggingFace articles:
@@ -171,8 +174,10 @@ class ClipGPTTrainer(BaseTrainer):
                 model.train()
                 if self.accelerator.is_main_process:
                     unwrapped_model: ClipGPT = self.accelerator.unwrap_model(model)  # type: ignore
+                    is_last_step = (step == max(eval_steps))  # if range: max(eval_steps[0], eval_steps[-1])
+                    optimizer, scheduler = (self.optimizer, self.scheduler) if is_last_step else (None, None)
                     save_step_model(
-                        unwrapped_model, self.optimizer, self.scheduler,
+                        unwrapped_model, optimizer, scheduler,
                         self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
                     )
 

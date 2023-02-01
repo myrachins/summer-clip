@@ -4,8 +4,8 @@ defaults:
   - _self_
 
 model:
-  meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-01-28/21-21-12/checkpoints/epoch_5/step_1432/model_cfg.yaml
-  state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-01-28/21-21-12/checkpoints/epoch_5/step_1432/model.ckpt
+  meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-01/09-32-11/checkpoints/epoch_1/step_20035/model_cfg.yaml
+  state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-01/09-32-11/checkpoints/epoch_1/step_20035/model.ckpt
 
 tokenizer:
   tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
@@ -25,7 +25,7 @@ dataset:  # if null, no perplexity eval
     text_column: ${dataset.text_column}
 
 data_loader:
-  batch_size: 56
+  batch_size: 32
   shuffle: false
   pin_memory: true
   num_workers: 2
