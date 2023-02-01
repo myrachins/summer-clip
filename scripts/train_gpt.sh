@@ -1,5 +1,4 @@
 #!/bin/sh
-#SBATCH -A proj_1329
 #SBATCH --gres=gpu:1 --time=1-00:00:00 --cpus-per-task=8
 #SBATCH --output=/home/myurachinskiy/CLIP/summer-clip/scripts/outs/slurm-%j.out
 nvidia-smi
