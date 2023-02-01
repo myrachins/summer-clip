@@ -8,7 +8,7 @@ clip:
   tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
 
 clip_gpt:
-  class_path: summer_clip.clip_prompt.gpt.ClipGPT
+  class_path: summer_clip.clip_prompt.gpt.ClipGPTFull
   gpt_model_id: gpt2-large
   clip_model_name: RN50
   adapters:
@@ -19,7 +19,7 @@ dataset:
   train:
     dataset:
       dataset_path: ${saved_paths.tokenized_datasets.openwebtext}
-    subpart: 0.01  # if null, all is taken
+    subpart: 0.1  # if null, all is taken
   val:
     dataset:
       path: wikitext
@@ -33,14 +33,14 @@ dataset:
 
 data_loader:
   train:
-    batch_size: 56
+    batch_size: 32
     shuffle: true
     pin_memory: true
     num_workers: 8
   val:
-    batch_size: 56
+    batch_size: 32
     shuffle: false
-    pin_memory: true
+    pin_memory: false
     num_workers: 8
 
 optim:
@@ -53,12 +53,12 @@ scheduler:
   warmup_part: 0.05
 
 accelerator:
-  gradient_accumulation_steps: 4
+  gradient_accumulation_steps: 16
 
 training:
-  epochs_num: 5
+  epochs_num: 4
   info_steps: 1
-  evals_per_epoch: 2
+  evals_per_epoch: 10
   clip_grad_norm: 1.0
   checkpoints_dir: checkpoints/
 
