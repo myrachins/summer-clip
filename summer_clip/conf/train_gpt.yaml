@@ -19,7 +19,7 @@ dataset:
   train:
     dataset:
       dataset_path: ${saved_paths.tokenized_datasets.openwebtext}
-    subpart: 0.1  # if null, all is taken
+    subpart: null  # 0.1  # if null, all is taken
   val:
     dataset:
       path: wikitext
@@ -33,12 +33,12 @@ dataset:
 
 data_loader:
   train:
-    batch_size: 32
+    batch_size: 36
     shuffle: true
     pin_memory: true
     num_workers: 8
   val:
-    batch_size: 32
+    batch_size: 36
     shuffle: false
     pin_memory: false
     num_workers: 8
@@ -53,7 +53,7 @@ scheduler:
   warmup_part: 0.05
 
 accelerator:
-  gradient_accumulation_steps: 32
+  gradient_accumulation_steps: 16
 
 training:
   epochs_num: 4

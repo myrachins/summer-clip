@@ -1,5 +1,5 @@
 #!/bin/sh
-#SBATCH --gres=gpu:1 --time=3-00:00:00 --cpus-per-task=8
+#SBATCH --gres=gpu:1 --time=5-00:00:00 --cpus-per-task=8
 #SBATCH --output=/home/myurachinskiy/CLIP/summer-clip/scripts/outs/slurm-%j.out
 nvidia-smi
 date

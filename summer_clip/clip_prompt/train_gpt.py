@@ -115,7 +115,10 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_scheduler(self):
         sch_cfg = self.cfg.scheduler
-        num_training_steps = self.cfg.training.epochs_num * len(self.loaders['train'])
+        num_training_steps = (
+            (self.cfg.training.epochs_num * len(self.loaders['train']))
+            // self.accelerator.gradient_accumulation_steps  # noqa: W503
+        )
         num_warmup_steps = int(num_training_steps * sch_cfg.warmup_part)
         self.scheduler = get_scheduler(
             name=sch_cfg.name,
@@ -126,17 +129,20 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_accelerator(self):
         self.accelerator = Accelerator(**self.cfg.accelerator)
-        self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
-            self.model, self.optimizer, self.loaders['train'], self.scheduler
-        )
+
+    def apply_accelerator(self):
         # Val loader should not be sent to 'prepare': problem with the 'end_of_dataloader' state
         # Alternatively could be resolved via restoring states after the evaluation:
         # self.accelerator.gradient_state._set_remainder(remainder)
         # self.accelerator.gradient_state._set_end_of_dataloader(end_of_dataloader)
+        self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.loaders['train'], self.scheduler
+        )
 
     def setup(self):
-        super().setup()
         self.setup_accelerator()
+        super().setup()
+        self.apply_accelerator()
 
     def train_epoch(self, epoch_num, epoch_info):
         train_cfg = self.cfg.training
