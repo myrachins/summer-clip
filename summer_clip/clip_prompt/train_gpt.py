@@ -6,6 +6,7 @@ import torch.utils
 import hydra
 from torch import optim
 from tqdm import tqdm
+from torch import nn
 from accelerate import Accelerator
 from datasets.load import load_dataset, load_from_disk
 from omegaconf import DictConfig, OmegaConf
@@ -29,8 +30,9 @@ def save_step_model(model: ClipGPT | None, optimizer: optim.Optimizer | None, sc
             accelerator.save(data, f)
 
     if model is not None:
-        save_data(model.training_state_dict(), 'model')
-        OmegaConf.save(model.cfg, step_dir / 'model_cfg.yaml')
+        unwrapped_model: ClipGPT = accelerator.unwrap_model(model)  # type: ignore
+        save_data(unwrapped_model.training_state_dict(), 'model')
+        OmegaConf.save(unwrapped_model.cfg, step_dir / 'model_cfg.yaml')
     if optimizer is not None:
         save_data(optimizer.state_dict(), 'optimizer')
     if scheduler is not None:
@@ -56,12 +58,13 @@ def get_grouped_params(model: ClipGPT, weight_decay: float, no_decay: tuple[str,
 
 
 @torch.no_grad()
-def evaluate(model: ClipGPT, accelerator: Accelerator, eval_dataloader: DataLoader) -> tuple[float, float]:
+def evaluate(model: nn.Module, val_loader: DataLoader, device: tp.Any) -> tuple[float, float]:
     model.eval()
     losses = []
-    for batch in tqdm(eval_dataloader, disable=not accelerator.is_local_main_process):
+    for batch in tqdm(val_loader):
+        batch = batch.to(device)
         outputs = model(**batch)
-        losses.append(accelerator.gather(outputs.loss))
+        losses.append(outputs.loss)
     loss = torch.mean(torch.stack(losses))
     perp = loss.exp()
     return loss.item(), perp.item()
@@ -123,9 +126,13 @@ class ClipGPTTrainer(BaseTrainer):
 
     def setup_accelerator(self):
         self.accelerator = Accelerator(**self.cfg.accelerator)
-        self.model, self.optimizer, self.loaders['train'], self.loaders['val'], self.scheduler = self.accelerator.prepare(
-            self.model, self.optimizer, self.loaders['train'], self.loaders['val'], self.scheduler
+        self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
+            self.model, self.optimizer, self.loaders['train'], self.scheduler
         )
+        # Val loader should not be sent to 'prepare': problem with the 'end_of_dataloader' state
+        # Alternatively could be resolved via restoring states after the evaluation:
+        # self.accelerator.gradient_state._set_remainder(remainder)
+        # self.accelerator.gradient_state._set_end_of_dataloader(end_of_dataloader)
 
     def setup(self):
         super().setup()
@@ -164,22 +171,19 @@ class ClipGPTTrainer(BaseTrainer):
                     "loss/train": loss.item()
                 })
 
-            if step in eval_steps:
-                self.accelerator.wait_for_everyone()
+            if step in eval_steps and self.accelerator.is_main_process:
                 self.accelerator.print('\nEvaluating and saving...')
-                eval_loss, perplexity = evaluate(self.model, self.accelerator, self.loaders['val'])
+                eval_loss, perplexity = evaluate(model, self.loaders['val'], self.accelerator.device)
                 self.logger.exp_logger.log({
                     "loss/eval": eval_loss, "metrics/perplexity": perplexity
                 })
                 model.train()
-                if self.accelerator.is_main_process:
-                    unwrapped_model: ClipGPT = self.accelerator.unwrap_model(model)  # type: ignore
-                    is_last_step = (step == max(eval_steps))  # if range: max(eval_steps[0], eval_steps[-1])
-                    optimizer, scheduler = (self.optimizer, self.scheduler) if is_last_step else (None, None)
-                    save_step_model(
-                        unwrapped_model, optimizer, scheduler,
-                        self.accelerator, epoch_num, step, Path(train_cfg.checkpoints_dir)
-                    )
+                is_last_step = (step == max(eval_steps))  # if range: max(eval_steps[0], eval_steps[-1])
+                optimizer, scheduler = (self.optimizer, self.scheduler) if is_last_step else (None, None)
+                save_step_model(
+                    model, optimizer, scheduler, self.accelerator,
+                    epoch_num, step, Path(train_cfg.checkpoints_dir)
+                )
 
         return epoch_info
 

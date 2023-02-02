@@ -3,8 +3,6 @@ from collections import defaultdict
 
 import torch
 import hydra
-from torch import nn
-from tqdm import tqdm
 from datasets.load import load_dataset
 from torch.utils.data import DataLoader
 from datasets.arrow_dataset import Dataset
@@ -16,6 +14,7 @@ from transformers import (
 
 from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.utils.trainer import set_random_state
+from summer_clip.clip_prompt.train_gpt import evaluate
 from summer_clip.clip_prompt.gpt import load_pretrained, ClipGPT
 from summer_clip.clip_prompt.tokenize_dataset import tokenize_dataset, tokenize_texts
 
@@ -50,19 +49,6 @@ def load_gpt(model_cfg_path: str) -> AutoModelForCausalLM:
 def load_gpt_tokenizer(model_cfg_path: str) -> PreTrainedTokenizerBase:
     model_cfg = OmegaConf.load(model_cfg_path)
     return AutoTokenizer.from_pretrained(model_cfg.gpt_model_id)
-
-
-@torch.no_grad()
-def evaluate(model: nn.Module, val_loader: DataLoader, device: tp.Any) -> tuple[float, float]:
-    model.eval()
-    losses = []
-    for batch in tqdm(val_loader):
-        batch = batch.to(device)
-        outputs = model(**batch)
-        losses.append(outputs.loss)
-    loss = torch.mean(torch.stack(losses))
-    perp = loss.exp()
-    return loss.item(), perp.item()
 
 
 def generate_texts(model: tp.Any, prompts: list[str], tokenizer: CLIPTokenizer, cfg: DictConfig) -> list[list[str]]:

@@ -122,14 +122,19 @@ class Timer:
     def __init__(self, info=None, log_event=None):
         self.info = info
         self.log_event = log_event
+        self.is_cuda = torch.cuda.is_available()
 
     def __enter__(self):
+        if not self.is_cuda:
+            return self
         self.start = torch.cuda.Event(enable_timing=True)  # type: ignore
         self.end = torch.cuda.Event(enable_timing=True)  # type: ignore
         self.start.record()  # type: ignore
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.is_cuda:
+            return
         self.end.record()  # type: ignore
         torch.cuda.synchronize()
         self.duration = self.start.elapsed_time(self.end) / 1000
