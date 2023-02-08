@@ -127,6 +127,19 @@ class ClipGPTTrainer(BaseTrainer):
             num_training_steps=num_training_steps
         )
 
+    def setup_pretrained(self):
+        def load_state(obj: tp.Any, state_path: str | None,
+                       load_kwargs: dict[str, tp.Any] | None = None, state_kwargs: dict[str, tp.Any] | None = None):
+            if state_path is not None:
+                load_kwargs, state_kwargs = load_kwargs or {}, state_kwargs or {}
+                state_dict = torch.load(state_path, **load_kwargs)
+                obj.load_state_dict(state_dict, **state_kwargs)
+
+        state_cfg = self.cfg.pretrained
+        load_state(self.model, state_cfg.model, dict(map_location=self.accelerator.device), dict(strict=False))
+        load_state(self.optimizer, state_cfg.optimizer, dict(map_location=self.accelerator.device))
+        load_state(self.scheduler, state_cfg.scheduler)
+
     def setup_accelerator(self):
         self.accelerator = Accelerator(**self.cfg.accelerator)
 
@@ -142,6 +155,7 @@ class ClipGPTTrainer(BaseTrainer):
     def setup(self):
         self.setup_accelerator()
         super().setup()
+        self.setup_pretrained()
         self.apply_accelerator()
 
     def train_epoch(self, epoch_num, epoch_info):

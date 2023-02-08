@@ -52,6 +52,11 @@ scheduler:
   name: cosine
   warmup_part: 0.05
 
+pretrained:
+  model: null
+  optimizer: null
+  scheduler: null
+
 accelerator:
   gradient_accumulation_steps: 16
 
