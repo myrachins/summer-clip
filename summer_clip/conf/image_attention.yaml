@@ -1,7 +1,7 @@
 defaults:
   - hydra_setup
   - adapter_setup
-  - saved_paths
+  - saved_paths: clip_paths
   - _self_
   - dataset: tip_eurosat_test_no_image
   - dataset@cache.dataset: tip_eurosat_train_no_image
