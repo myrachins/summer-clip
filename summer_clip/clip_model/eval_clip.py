@@ -15,18 +15,18 @@ from summer_clip.clip_adapter import train_adapter
 from summer_clip.utils.trainer import set_random_state
 
 
-def zeroshot_classifier(model, classnames, templates):
+def zeroshot_classifier(model, classnames, templates, device='cuda'):
     with torch.no_grad():
         zeroshot_weights = []
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates]
-            texts = clip.tokenize(texts).cuda()
+            texts = clip.tokenize(texts).to(device)
             class_embeddings = model.encode_text(texts)
             class_embeddings /= class_embeddings.norm(dim=-1, keepdim=True)
             class_embedding = class_embeddings.mean(dim=0)
             class_embedding /= class_embedding.norm()
             zeroshot_weights.append(class_embedding)
-        zeroshot_weights = torch.stack(zeroshot_weights, dim=1).cuda()
+        zeroshot_weights = torch.stack(zeroshot_weights, dim=1).to(device)
     return zeroshot_weights
 
 
