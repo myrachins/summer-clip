@@ -7,20 +7,7 @@ from torch import nn
 from omegaconf import DictConfig
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
-from transformers import CLIPTokenizer, get_scheduler
-
-
-class PromptGPT(nn.Module):
-    def __init__(self, gpt: nn.Module) -> None:
-        super().__init__()
-        self.gpt = gpt
-
-    def forward(self, prompt_embs, input_ids, **kwargs):
-        input_embs = self.gpt.wte(input_ids)  # type: ignore
-        prompt_embs = prompt_embs.unsqueeze(dim=0)
-        # TODO: Add bos embedding
-        input_embs = torch.cat([prompt_embs, input_embs], dim=1)
-        return self.gpt(input_embs=input_embs, **kwargs)
+from transformers import get_scheduler, DataCollatorForLanguageModeling
 
 
 # class ClipTextEncoder(nn.Module):
@@ -29,15 +16,6 @@ class PromptGPT(nn.Module):
 #         self.
 
 #     def forward(self, input_embs, input_ids):
-
-
-class PromptClipText(nn.Module):
-    def __init__(self, clip_model: nn.Module) -> None:
-        super().__init__()
-        self.clip_model = clip_model
-
-    def forward(self, prompt_embs, input_ids, **kwargs):
-        raise NotImplementedError()
 
 
 def light_cycle(iterable: tp.Iterable) -> tp.Generator[tp.Any, None, None]:
@@ -50,6 +28,11 @@ class LangevinOptim(Optimizer):
         self.opt = hydra.utils.instantiate(optim_cfg.base_optim, params=params)
         assert isinstance(self.opt.params, dict), "By now only dicts are supported for the params"
         self.beta_start, self.beta_end = optim_cfg.beta_start, optim_cfg.beta_end
+        self._set_beta_init()
+
+    def _set_beta_init(self):
+        for group in self.opt.params:
+            group['lg'] = self.beta_start
 
     def step(self, *args, **kwargs):
         res = self.opt.step(*args, **kwargs)
@@ -90,12 +73,12 @@ class LangevinScheduler(_LRScheduler):
         return self.scheduler.get_lr()
 
 
-class AutoPromptModel(nn.Module):
+class FluentPromptModel(nn.Module):
     def __init__(self, model_cfg: DictConfig, clip_embs: nn.Embedding, init_ids: torch.IntTensor) -> None:
         self.model_cfg = model_cfg
         self.clip_embs = clip_embs.weight
         self.prompt_ids = init_ids
-        self.prompt_embs = nn.Parameter(self.clip_embs[init_ids].clone(), requires_grad=True)
+        self.prompt_embs = nn.Parameter(self.clip_embs[init_ids].detach().clone(), requires_grad=True)
 
     def get_prompt_embs(self) -> torch.Tensor:
         return self.prompt_embs
@@ -109,7 +92,7 @@ class AutoPromptModel(nn.Module):
             **self.model_cfg.cdist_kwargs
         ).squeeze(0)
         self.prompt_ids = dists.argmin(dim=1)
-        self.prompt_embs.data = self.clip_embs[self.prompt_ids].clone()
+        self.prompt_embs.data = self.clip_embs[self.prompt_ids].detach().clone()
 
 
 class InitTextPrompter:
@@ -136,7 +119,7 @@ class InitNumTokensPrompter:
         self.length = length
 
     def get_ids(self, tokenizer) -> tp.Any:
-        tokens = self.token * self.length
+        tokens = [self.token] * self.length
         return tokenizer(tokens, add_special_tokens=False, is_split_into_words=True)
 
 
@@ -145,5 +128,20 @@ class LeftPromptCollator:
         self.tokenizer = tokenizer
         self.embs = embs
 
+        self.bos_id = self.tokenizer.bos_token_id
+        self.eos_id = self.tokenizer.eos_token_id
+        self.lm_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+
     def get_gpt_input(self, prompt_embs, prompt_ids, input_ids):
-        pass
+        prompt_ids = list(prompt_ids)
+        input_ids = [
+            [self.bos_id] + prompt_ids + list(i_ids)
+            for i_ids in input_ids
+        ]
+        lm_batch = self.lm_collator(input_ids)
+        lm_batch = lm_batch.to(prompt_embs.device)
+        input_embs = self.embs(lm_batch['input_ids'])
+        input_embs[:, 1:prompt_embs.shape[0] + 1, :] = prompt_embs.unsqueeze(0)
+        lm_batch.pop('input_ids')
+        lm_batch['input_embs'] = input_embs
+        return lm_batch
