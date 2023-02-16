@@ -4,7 +4,6 @@ import os.path as osp
 import tarfile
 import zipfile
 from collections import defaultdict
-import gdown
 import json
 import torch
 import torch.utils.data
@@ -191,6 +190,7 @@ class DatasetBase:
             os.makedirs(osp.dirname(dst))
 
         if from_gdrive:
+            import gdown  # type: ignore
             gdown.download(url, dst, quiet=False)
         else:
             raise NotImplementedError
