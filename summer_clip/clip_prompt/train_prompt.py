@@ -26,7 +26,7 @@ def save_epoch_model(model: tp.Any, tokenizer: CLIPTokenizer, epoch_num: int, ch
     epoch_dir.mkdir(parents=True, exist_ok=True)
 
     prompt_ids = model.get_prompt_ids()
-    prompt_tokens = tokenizer.decode(prompt_ids, clean_up_tokenization_spaces=False)
+    prompt_tokens = [tokenizer.decoder[prompt_id] for prompt_id in prompt_ids]
     epoch_cfg = OmegaConf.create(dict(prompt_ids=prompt_ids, prompt_tokens=prompt_tokens))
     OmegaConf.save(epoch_cfg, epoch_dir / 'prompts.yaml')
 
@@ -73,7 +73,7 @@ class PromptTrainer(BaseTrainer):
         clip_model, _ = clip.load(self.cfg.clip.model_name, device='cpu', jit=False)
         clip_model = clip_model.float()
         set_requires_grad(clip_model, requires_grad=False)
-        clip_embs = clip_model.token_embedding
+        clip_embs = clip_model.token_embedding.to(self.accelerator.device)
         init_prompter = hydra.utils.instantiate(self.cfg.init_prompter)
         self.model = hydra.utils.instantiate(
             self.cfg.prompt_model, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)

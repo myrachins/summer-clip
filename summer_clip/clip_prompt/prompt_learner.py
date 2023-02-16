@@ -86,7 +86,7 @@ class LangevinScheduler(_LRScheduler):
 
 
 class FluentPromptModel(nn.Module):
-    def __init__(self, model_cfg: DictConfig, clip_embs: nn.Embedding, init_ids: torch.IntTensor) -> None:
+    def __init__(self, model_cfg: DictConfig, clip_embs: nn.Embedding, init_ids: list[int]) -> None:
         super().__init__()
         self.model_cfg = model_cfg
         self.clip_embs = clip_embs.weight.data
@@ -96,7 +96,7 @@ class FluentPromptModel(nn.Module):
     def get_prompt_embs(self) -> torch.Tensor:
         return self.prompt_embs
 
-    def get_prompt_ids(self) -> torch.Tensor:
+    def get_prompt_ids(self) -> list[int]:
         return self.prompt_ids
 
     def step(self):
@@ -104,8 +104,9 @@ class FluentPromptModel(nn.Module):
             self.prompt_embs.unsqueeze(0), self.clip_embs.unsqueeze(0),
             **self.model_cfg.cdist_kwargs
         ).squeeze(0)
-        self.prompt_ids = dists.argmin(dim=1)
+        prompt_ids = dists.argmin(dim=1)
         self.prompt_embs.data = self.clip_embs[self.prompt_ids].detach().clone()
+        self.prompt_ids = prompt_ids.cpu().tolist()
 
 
 class InitTextPrompter:
