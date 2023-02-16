@@ -18,6 +18,7 @@ from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_adapter.train_adapter import NoImageIndexedDataset
 from summer_clip.clip_prompt.gen_gpt import load_pretrained_model
+from summer_clip.clip_prompt.prompt_learner import GPTEmbed
 
 
 def save_epoch_model(model: tp.Any, tokenizer: CLIPTokenizer, epoch_num: int, checkpoints_dir: Path) -> None:
@@ -43,6 +44,11 @@ def get_grouped_params(model: ClipGPT, weight_decay: float, no_decay: tuple[str,
     ]
 
 
+def set_requires_grad(model: nn.Module, requires_grad: bool) -> None:
+    for param in model.parameters():
+        param.requires_grad_(requires_grad)
+
+
 class PromptTrainer(BaseTrainer):
     def setup_dataset(self):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
@@ -59,12 +65,14 @@ class PromptTrainer(BaseTrainer):
         }
 
     def setup_model(self):
-        self.gpt = load_pretrained_model(
+        self.gpt = GPTEmbed(load_pretrained_model(
             self.cfg.model.meta_cfg_path, self.cfg.model.state_dict_path,
             map_location=self.accelerator.device
-        ).gpt
+        ).gpt)
+        set_requires_grad(self.gpt, requires_grad=False)
         clip_model, _ = clip.load(self.cfg.clip.model_name, device='cpu', jit=False)
         clip_model = clip_model.float()
+        set_requires_grad(clip_model, requires_grad=False)
         clip_embs = clip_model.token_embedding
         init_prompter = hydra.utils.instantiate(self.cfg.init_prompter)
         self.model = hydra.utils.instantiate(
@@ -112,7 +120,7 @@ class PromptTrainer(BaseTrainer):
     def train_epoch(self, epoch_num, epoch_info):
         train_cfg = self.cfg.training
         self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
-        gpt = self.gpt.train()
+        gpt = self.gpt.eval()
         completed_steps = 0
 
         for step, (labels, indexes) in enumerate(
@@ -120,7 +128,12 @@ class PromptTrainer(BaseTrainer):
         ):
             # Batch of samples could be sampled randomly
             batch_classes = [self.token_classes[ind] for ind in labels]
-            lm_batch = self.collator(batch_classes)
+            prompt_embs = self.model.get_prompt_embs()
+            prompt_ids = self.model.get_prompt_ids()
+            lm_batch = self.collator.get_gpt_input(
+                prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+                input_ids=batch_classes
+            )
             with self.accelerator.accumulate(gpt):
                 loss = gpt(**lm_batch).loss
                 self.accelerator.backward(loss)

@@ -16,8 +16,7 @@ model:
 prompt_model:
   _target_: summer_clip.clip_prompt.prompt_learner.FluentPromptModel
   model_cfg:
-    cdist_kwargs:
-      p: 2.0
+    cdist_kwargs: {}
 
 init_prompter:
   _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
@@ -40,15 +39,15 @@ optim:
         base_optim:
           path: torch.optim.AdamW
           kwargs:
-            lr: 5e-4
-        beta_start: 1.0
+            lr: 0.3
+        beta_start: 0.1
         beta_end: 0.0001
 
 scheduler:
   # get_scheduler_fun: transformers.get_scheduler
   get_scheduler_fun: summer_clip.clip_prompt.prompt_learner.LangevinScheduler
-  name: cosine
-  warmup_part: 0.05
+  name: constant
+  warmup_part: 0.
 
 collator:
   _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator

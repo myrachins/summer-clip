@@ -10,6 +10,17 @@ from torch.optim.lr_scheduler import _LRScheduler
 from transformers import DataCollatorForLanguageModeling, get_scheduler
 
 from summer_clip.utils.hydra_utils import load_obj
+from summer_clip.clip_prompt.gpt import ClipGPT
+
+
+class GPTEmbed(nn.Module):
+    def __init__(self, gpt: ClipGPT) -> None:
+        super().__init__()
+        self.gpt = gpt
+
+    def forward(self, inputs_embeds, **kwargs):
+        inputs_embeds = self.gpt.transformer.wte.adapter(inputs_embeds)  # type: ignore
+        return self.gpt(inputs_embeds=inputs_embeds, **kwargs)
 
 
 # class ClipTextEncoder(nn.Module):
@@ -17,7 +28,7 @@ from summer_clip.utils.hydra_utils import load_obj
 #         super().__init_()
 #         self.
 
-#     def forward(self, input_embs, input_ids):
+#     def forward(self, inputs_embeds, input_ids):
 
 
 def make_langevin_optim(params: tp.Any, optim_cfg: DictConfig):
@@ -34,7 +45,7 @@ def make_langevin_optim(params: tp.Any, optim_cfg: DictConfig):
                 group['lg'] = self.beta_start
 
         def step(self, *args, **kwargs):
-            res = self.step(*args, **kwargs)
+            res = super().step(*args, **kwargs)
             for group in self.param_groups:
                 params = group['params']
                 lr = group['lr']
@@ -140,10 +151,11 @@ class LeftPromptCollator:
             [self.bos_id] + prompt_ids + list(i_ids)
             for i_ids in input_ids
         ]
-        lm_batch = self.lm_collator(input_ids)
-        lm_batch = lm_batch.to(prompt_embs.device)
+        lm_batch = [dict(input_ids=i_ids, attention_mask=[1] * len(i_ids)) for i_ids in input_ids]
+        lm_batch = self.lm_collator(lm_batch)
+        lm_batch = {key: val.to(prompt_embs.device) for key, val in lm_batch.items()}
         input_embs = self.embs(lm_batch['input_ids'])
         input_embs[:, 1:prompt_embs.shape[0] + 1, :] = prompt_embs.unsqueeze(0)
         lm_batch.pop('input_ids')
-        lm_batch['input_embs'] = input_embs
+        lm_batch['inputs_embeds'] = input_embs
         return lm_batch
