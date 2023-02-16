@@ -1,0 +1,68 @@
+defaults:
+  - hydra_setup
+  - meta_setup
+  - _self_
+  - dataset: tip_eurosat_train_no_image
+  - prompting: tip_eurosat
+
+clip:
+  model_name: RN50
+  tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
+
+model:
+  meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model_cfg.yaml
+  state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
+
+prompt_model:
+  _target_: summer_clip.clip_prompt.prompt_learner.FluentPromptModel
+  model_cfg:
+    cdist_kwargs:
+      p: 2.0
+
+init_prompter:
+  _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
+  token: <|startoftext|>
+  length: 5
+
+data_loader:
+  train:
+    batch_size: 36
+    shuffle: true
+    pin_memory: true
+    num_workers: 4
+
+optim:
+  weight_decay: 0.1
+  optimizer:
+    _target_: summer_clip.clip_prompt.prompt_learner.LangevinOptim
+    optim_cfg:
+      base_optim:
+        _target_: torch.optim.AdamW
+        lr: 5e-4
+      beta_start: 1.0
+      beta_end: 0.0001
+
+scheduler:
+  # get_scheduler_fun: transformers.get_scheduler
+  get_scheduler_fun: summer_clip.clip_prompt.prompt_learner.LangevinScheduler
+  name: cosine
+  warmup_part: 0.05
+
+collator:
+  _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
+
+accelerator:
+  gradient_accumulation_steps: 16
+
+training:
+  epochs_num: 4
+  info_steps: 1
+  clip_grad_norm: 1.0
+  checkpoints_dir: checkpoints/
+
+log:
+  calculate_every: 1
+
+exp:
+  project: train_prompt
+  name: prompt_v1

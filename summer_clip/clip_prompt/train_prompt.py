@@ -66,7 +66,7 @@ class PromptTrainer(BaseTrainer):
         clip_model, _ = clip.load(self.cfg.clip.model_name, device='cpu', jit=False)
         clip_model = clip_model.float()
         clip_embs = clip_model.token_embedding
-        init_prompter = hydra.utils.instantiate(self.cfg.init_prompt)
+        init_prompter = hydra.utils.instantiate(self.cfg.init_prompter)
         self.model = hydra.utils.instantiate(
             self.cfg.prompt_model, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
         )
@@ -99,8 +99,8 @@ class PromptTrainer(BaseTrainer):
         # Alternatively could be resolved via restoring states after the evaluation:
         # self.accelerator.gradient_state._set_remainder(remainder)
         # self.accelerator.gradient_state._set_end_of_dataloader(end_of_dataloader)
-        self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
-            self.model, self.optimizer, self.loaders['train'], self.scheduler
+        self.gpt, self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
+            self.gpt, self.model, self.optimizer, self.loaders['train'], self.scheduler
         )
 
     def setup(self):
