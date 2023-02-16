@@ -48,9 +48,9 @@ class PromptTrainer(BaseTrainer):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
         self.dataset = NoImageIndexedDataset(self.source_dataset)
 
-        self.text_classes = self.cfg.prompting.classes or self.source_dataset.classes
+        self.text_classes = list(self.cfg.prompting.classes or self.source_dataset.classes)
         self.tokenizer = CLIPTokenizer.from_pretrained(self.cfg.clip.tokenizer_id)
-        self.token_classes = self.tokenizer(self.text_classes, add_special_tokens=False)
+        self.token_classes = self.tokenizer(self.text_classes, add_special_tokens=False)['input_ids']
 
     def setup_loaders(self):
         ld_cfg = self.cfg.data_loader
@@ -73,8 +73,9 @@ class PromptTrainer(BaseTrainer):
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
 
     def setup_optimizer(self):
-        params = get_grouped_params(self.model, weight_decay=self.cfg.optim.weight_decay)
-        self.optimizer = hydra.utils.instantiate(self.cfg.optim.optimizer, params=params)
+        opt_cfg = self.cfg.optim
+        params = get_grouped_params(self.model, weight_decay=opt_cfg.weight_decay)
+        self.optimizer = load_obj(opt_cfg.optimizer.path)(params=params, **opt_cfg.optimizer.kwargs)
 
     def setup_scheduler(self):
         sch_cfg = self.cfg.scheduler

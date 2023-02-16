@@ -34,13 +34,15 @@ data_loader:
 optim:
   weight_decay: 0.1
   optimizer:
-    _target_: summer_clip.clip_prompt.prompt_learner.LangevinOptim
-    optim_cfg:
-      base_optim:
-        _target_: torch.optim.AdamW
-        lr: 5e-4
-      beta_start: 1.0
-      beta_end: 0.0001
+    path: summer_clip.clip_prompt.prompt_learner.make_langevin_optim
+    kwargs:
+      optim_cfg:
+        base_optim:
+          path: torch.optim.AdamW
+          kwargs:
+            lr: 5e-4
+        beta_start: 1.0
+        beta_end: 0.0001
 
 scheduler:
   # get_scheduler_fun: transformers.get_scheduler

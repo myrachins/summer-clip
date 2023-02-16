@@ -7,7 +7,9 @@ from torch import nn
 from omegaconf import DictConfig
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
-from transformers import get_scheduler, DataCollatorForLanguageModeling
+from transformers import DataCollatorForLanguageModeling, get_scheduler
+
+from summer_clip.utils.hydra_utils import load_obj
 
 
 # class ClipTextEncoder(nn.Module):
@@ -18,49 +20,48 @@ from transformers import get_scheduler, DataCollatorForLanguageModeling
 #     def forward(self, input_embs, input_ids):
 
 
-def light_cycle(iterable: tp.Iterable) -> tp.Generator[tp.Any, None, None]:
-    while True:
-        yield from iterable
+def make_langevin_optim(params: tp.Any, optim_cfg: DictConfig):
+    opt_class = load_obj(optim_cfg.base_optim.path)
 
+    class LangevinOptim(opt_class):  # type: ignore
+        def __init__(self) -> None:
+            super().__init__(params=params, **optim_cfg.base_optim.kwargs)
+            self.beta_start, self.beta_end = optim_cfg.beta_start, optim_cfg.beta_end
+            self._set_beta_init()
 
-class LangevinOptim(Optimizer):
-    def __init__(self, params, optim_cfg: DictConfig) -> None:
-        self.opt = hydra.utils.instantiate(optim_cfg.base_optim, params=params)
-        assert isinstance(self.opt.params, dict), "By now only dicts are supported for the params"
-        self.beta_start, self.beta_end = optim_cfg.beta_start, optim_cfg.beta_end
-        self._set_beta_init()
+        def _set_beta_init(self):
+            for group in self.param_groups:
+                group['lg'] = self.beta_start
 
-    def _set_beta_init(self):
-        for group in self.opt.params:
-            group['lg'] = self.beta_start
+        def step(self, *args, **kwargs):
+            res = self.step(*args, **kwargs)
+            for group in self.param_groups:
+                params = group['params']
+                lr = group['lr']
+                lg = group['lg']
+                for param in params:
+                    if param.grad is None:
+                        continue
+                    noise = torch.normal(mean=torch.zeros_like(param), std=torch.ones_like(param))
+                    noise_coef = math.sqrt(2 * lr * lg)
+                    param.data.add_(noise_coef * noise)
+            return res
 
-    def step(self, *args, **kwargs):
-        res = self.opt.step(*args, **kwargs)
-        for group in self.opt.params:
-            params = group['params']
-            lr = group['lr']
-            lg = group['lg']
-            for param in params:
-                if param.grad is None:
-                    continue
-                noise = torch.normal(mean=torch.zeros_like(param), std=torch.ones_like(param))
-                noise_coef = math.sqrt(2 * lr * lg)
-                param.data.add_(noise_coef * noise)
-        return res
+    return LangevinOptim()
 
 
 class LangevinScheduler(_LRScheduler):
     def __init__(self, **kwargs: tp.Any) -> None:
         self.scheduler = get_scheduler(**kwargs)
         self.opt = kwargs['optimizer']
-        assert isinstance(self.opt, LangevinOptim), \
+        assert self.opt.__class__.__name__ == "LangevinOptim", \
             "Only LangevinOptim is supported as an optimizer"
         num_training_steps = kwargs['num_training_steps']
         self.beta_step = math.pow(self.opt.beta_start / self.opt.beta_end, 1 / num_training_steps)
 
     def step(self):
         self.scheduler.step()
-        for group in self.opt.params:
+        for group in self.opt.param_groups:
             group['lg'] /= self.beta_step
 
     def get_last_beta(self):
@@ -75,8 +76,9 @@ class LangevinScheduler(_LRScheduler):
 
 class FluentPromptModel(nn.Module):
     def __init__(self, model_cfg: DictConfig, clip_embs: nn.Embedding, init_ids: torch.IntTensor) -> None:
+        super().__init__()
         self.model_cfg = model_cfg
-        self.clip_embs = clip_embs.weight
+        self.clip_embs = clip_embs.weight.data
         self.prompt_ids = init_ids
         self.prompt_embs = nn.Parameter(self.clip_embs[init_ids].detach().clone(), requires_grad=True)
 
@@ -102,7 +104,7 @@ class InitTextPrompter:
 
     def get_ids(self, tokenizer) -> tp.Any:
         truncation = self.max_length is not None
-        return tokenizer(self.text, add_special_tokens=False, truncation=truncation, max_length=self.max_length)
+        return tokenizer(self.text, add_special_tokens=False, truncation=truncation, max_length=self.max_length)['input_ids']
 
 
 class InitTokensPrompter:
@@ -110,7 +112,7 @@ class InitTokensPrompter:
         self.tokens = tokens
 
     def get_ids(self, tokenizer) -> tp.Any:
-        return tokenizer(self.tokens, add_special_tokens=False, is_split_into_words=True)
+        return tokenizer(self.tokens, add_special_tokens=False, is_split_into_words=True)['input_ids']
 
 
 class InitNumTokensPrompter:
@@ -120,7 +122,7 @@ class InitNumTokensPrompter:
 
     def get_ids(self, tokenizer) -> tp.Any:
         tokens = [self.token] * self.length
-        return tokenizer(tokens, add_special_tokens=False, is_split_into_words=True)
+        return tokenizer(tokens, add_special_tokens=False, is_split_into_words=True)['input_ids']
 
 
 class LeftPromptCollator:
