@@ -160,3 +160,29 @@ class LeftPromptCollator:
         lm_batch.pop('input_ids')
         lm_batch['inputs_embeds'] = input_embs
         return lm_batch
+
+
+class ImageTextBatcher:
+    def __init__(self, token_classes, text_classes):
+        self.token_classes = token_classes
+
+    def get_batch_classes(self, batch_labels):
+        return [self.token_classes[ind] for ind in batch_labels]
+
+
+class OneTextBatcher:
+    def __init__(self, token_classes, text_classes, class_ind: int) -> None:
+        self.token_classes = token_classes
+        self.class_ind = class_ind
+
+    def get_batch_classes(self, batch_labels):
+        return [self.token_classes[self.class_ind]]
+
+
+class OneStrTextBatcher(OneTextBatcher):
+    def __init__(self, token_classes, text_classes, class_str: str) -> None:
+        class_ind = text_classes.index(class_str)
+        super().__init__(
+            token_classes=token_classes, text_classes=text_classes,
+            class_ind=class_ind
+        )
