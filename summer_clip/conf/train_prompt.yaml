@@ -7,7 +7,15 @@ defaults:
 
 clip:
   model_name: RN50
-  tokenizer_id: openai/clip-vit-base-patch32  # should not differ from large
+
+tokenizer:
+  # path: transformers.CLIPTokenizer
+  path: transformers.GPT2Tokenizer
+  # name: openai/clip-vit-base-patch32  # should not differ from large
+  name: gpt2-large
+  set_pad_as_eos: true
+  tokenize_classes_kwargs:
+    add_prefix_space: true
 
 model:
   use_clip_gpt: false
@@ -19,10 +27,15 @@ prompt_model:
   model_cfg:
     cdist_kwargs: {}
 
+# init_prompter:
+#   _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
+#   token: <|startoftext|>
+#   length: 5
+
 init_prompter:
-  _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
-  token: <|startoftext|>
-  length: 5
+  _target_: summer_clip.clip_prompt.prompt_learner.InitTextPrompter
+  text: "a a a a a"
+  assert_length: 5
 
 text_batcher:
   path: summer_clip.clip_prompt.prompt_learner.OneStrTextBatcher
@@ -36,22 +49,29 @@ data_loader:
     pin_memory: true
     num_workers: 4
 
+# optim:
+#   weight_decay: 0.01
+#   optimizer:
+#     path: summer_clip.clip_prompt.prompt_learner.make_langevin_optim
+#     kwargs:
+#       optim_cfg:
+#         base_optim:
+#           path: torch.optim.AdamW
+#           kwargs:
+#             lr: 1.0
+#         beta_start: 1e-8
+#         beta_end: 1e-8
+
 optim:
   weight_decay: 0.01
   optimizer:
-    path: summer_clip.clip_prompt.prompt_learner.make_langevin_optim
+    path: torch.optim.AdamW
     kwargs:
-      optim_cfg:
-        base_optim:
-          path: torch.optim.AdamW
-          kwargs:
-            lr: 1.0
-        beta_start: 1e-8
-        beta_end: 1e-8
+      lr: 1.0
 
 scheduler:
-  # get_scheduler_fun: transformers.get_scheduler
-  get_scheduler_fun: summer_clip.clip_prompt.prompt_learner.LangevinScheduler
+  get_scheduler_fun: transformers.get_scheduler
+  # get_scheduler_fun: summer_clip.clip_prompt.prompt_learner.LangevinScheduler
   name: constant
   warmup_part: 0.
 

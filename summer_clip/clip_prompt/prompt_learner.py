@@ -110,13 +110,15 @@ class FluentPromptModel(nn.Module):
 
 
 class InitTextPrompter:
-    def __init__(self, text: str, max_length: tp.Optional[int] = None) -> None:
+    def __init__(self, text: str, assert_length: tp.Optional[int] = None) -> None:
         self.text = text
-        self.max_length = max_length
+        self.assert_length = assert_length
 
     def get_ids(self, tokenizer) -> tp.Any:
-        truncation = self.max_length is not None
-        return tokenizer(self.text, add_special_tokens=False, truncation=truncation, max_length=self.max_length)['input_ids']
+        tokens = tokenizer(self.text, add_special_tokens=False)['input_ids']
+        if self.assert_length is not None:
+            assert len(tokens) == self.assert_length, "Lens do not match"
+        return tokens
 
 
 class InitTokensPrompter:

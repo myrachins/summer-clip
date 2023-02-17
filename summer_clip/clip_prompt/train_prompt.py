@@ -79,9 +79,16 @@ class PromptTrainer(BaseTrainer):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
         self.dataset = NoImageIndexedDataset(self.source_dataset)
 
+        tokenizer_class = load_obj(self.cfg.tokenizer.path)
+        self.tokenizer = tokenizer_class.from_pretrained(self.cfg.tokenizer.name)
+        if self.cfg.tokenizer.set_pad_as_eos:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
         self.text_classes = list(self.cfg.prompting.classes or self.source_dataset.classes)
-        self.tokenizer = CLIPTokenizer.from_pretrained(self.cfg.clip.tokenizer_id)
-        self.token_classes = self.tokenizer(self.text_classes, add_special_tokens=False)['input_ids']
+        self.token_classes = self.tokenizer(
+            self.text_classes, add_special_tokens=False,
+            **self.cfg.tokenizer.tokenize_classes_kwargs
+        )['input_ids']
 
     def setup_loaders(self):
         ld_cfg = self.cfg.data_loader
