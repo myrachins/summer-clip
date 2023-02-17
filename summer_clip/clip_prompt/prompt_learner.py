@@ -205,3 +205,11 @@ class OneStrTextBatcher(OneTextBatcher):
             token_classes=token_classes, text_classes=text_classes,
             class_ind=class_ind
         )
+
+
+class EmptyTextBatcher:
+    def __init__(self, token_classes, text_classes):
+        pass
+
+    def get_batch_classes(self, batch_labels):
+        return [[]]
