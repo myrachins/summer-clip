@@ -62,16 +62,16 @@ class TopPrompter:
         self.heap: list[tuple[tp.Any, tp.Any]] = []
 
     def push(self, prompt_ids, prompt_loss) -> None:
-        push_val = (prompt_loss, prompt_ids)
-        min_val = heapq.heappushpop(self.heap, push_val)
+        push_val = (-prompt_loss, prompt_ids)
+        max_loss_val = heapq.heappushpop(self.heap, push_val)
         if len(self.heap) < self.max_size:
-            heapq.heappush(self.heap, min_val)
+            heapq.heappush(self.heap, max_loss_val)
 
     def clear(self) -> None:
         self.heap.clear()
 
     def items(self) -> list[tuple[tp.Any, tp.Any]]:
-        return [(p_ids, loss) for (loss, p_ids) in sorted(self.heap)]
+        return [(p_ids, -neg_loss) for (neg_loss, p_ids) in sorted(self.heap, reverse=True)]
 
 
 class PromptTrainer(BaseTrainer):
@@ -106,7 +106,7 @@ class PromptTrainer(BaseTrainer):
             gpt = GPTEmbed(clip_gpt.gpt)
             embs = clip_gpt.gpt.transformer.wte.emb
         else:
-            gpt = load_gpt(self.cfg.model.meta_cfg_path)
+            gpt = load_gpt(self.cfg.model.meta_cfg_path).to(self.accelerator.device)  # type: ignore
             embs = gpt.transformer.wte  # type: ignore
         return gpt, embs
 

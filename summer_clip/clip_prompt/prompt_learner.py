@@ -1,4 +1,5 @@
 import math
+import random
 import typing as tp
 
 import hydra
@@ -122,7 +123,7 @@ class InitTextPrompter:
 
 
 class InitTokensPrompter:
-    def __init__(self, tokens: list[str]):
+    def __init__(self, tokens: list[str]) -> None:
         self.tokens = tokens
 
     def get_ids(self, tokenizer) -> tp.Any:
@@ -130,13 +131,29 @@ class InitTokensPrompter:
 
 
 class InitNumTokensPrompter:
-    def __init__(self, token: str, length: int):
+    def __init__(self, token: str, length: int) -> None:
         self.token = token
         self.length = length
 
     def get_ids(self, tokenizer) -> tp.Any:
         tokens = [self.token] * self.length
         return tokenizer(tokens, add_special_tokens=False, is_split_into_words=True)['input_ids']
+
+
+class InitRandomPrompter:
+    def __init__(self, length: int) -> None:
+        self.length = length
+
+    def get_ids(self, tokenizer) -> tp.Any:
+        special_tokens = (
+            'bos_token_id', 'eos_token_id', 'pad_token_id', 'cls_token_id', 'unk_token_id'
+        )
+        special_tokens_ids = {
+            special_token_id for special_token in special_tokens
+            if (special_token_id := getattr(tokenizer, special_token, None)) is not None
+        }
+        tokens_ids = set(range(len(tokenizer))) - special_tokens_ids
+        return random.choices(list(tokens_ids), k=self.length)
 
 
 class LeftPromptCollator:

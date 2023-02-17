@@ -33,9 +33,8 @@ prompt_model:
 #   length: 5
 
 init_prompter:
-  _target_: summer_clip.clip_prompt.prompt_learner.InitTextPrompter
-  text: "a a a a a"
-  assert_length: 5
+  _target_: summer_clip.clip_prompt.prompt_learner.InitRandomPrompter
+  length: 5
 
 text_batcher:
   path: summer_clip.clip_prompt.prompt_learner.OneStrTextBatcher
