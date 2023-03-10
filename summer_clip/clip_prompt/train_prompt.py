@@ -114,13 +114,13 @@ class PromptTrainer(BaseTrainer):
         self.gpt, clip_embs = self._load_gpt_model()
         set_requires_grad(self.gpt, requires_grad=False)
         set_requires_grad(clip_embs, requires_grad=False)
-        init_prompter = hydra.utils.instantiate(self.cfg.init_prompter)
-        self.model = hydra.utils.instantiate(
-            self.cfg.prompt_model, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
-        )
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
         self.text_batcher = load_obj(self.cfg.text_batcher.path)(
             token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
+        )
+        init_prompter = hydra.utils.instantiate(self.cfg.init_prompter)
+        self.model = hydra.utils.instantiate(
+            self.cfg.prompt_model, trainer=self, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
         )
         self.top_prompts = TopPrompter(max_size=self.cfg.training.max_top_prompts)
 
@@ -180,12 +180,8 @@ class PromptTrainer(BaseTrainer):
             with self.accelerator.accumulate(gpt):
                 loss = gpt(**lm_batch).loss
                 self.accelerator.backward(loss)
-                if self.accelerator.sync_gradients:
-                    self.accelerator.clip_grad_norm_(
-                        self.model.parameters(), train_cfg.clip_grad_norm
-                    )
-                self.optimizer.step()
-                self.scheduler.step()
+                # self.optimizer.step()
+                # self.scheduler.step()
                 sum_loss += loss.item()
                 no_grad_steps += 1
                 if self.accelerator.sync_gradients:
