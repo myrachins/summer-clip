@@ -1,7 +1,7 @@
 import typing as tp
 
 from torch.utils.data.dataset import Dataset
-from imagenetv2_pytorch import ImageNetV2Dataset
+# from imagenetv2_pytorch import ImageNetV2Dataset
 from torchvision import transforms
 from torchvision.datasets import ImageNet
 
@@ -16,14 +16,14 @@ class NoImageImageNetDataset(ImageNet):
         super().__init__(*args, **kwargs)
 
 
-class ImageNetV2Wrapper(ImageNetV2Dataset):
-    def __init__(self, *args, image_net_root: tp.Optional[str] = None, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.classes = None
+# class ImageNetV2Wrapper(ImageNetV2Dataset):
+#     def __init__(self, *args, image_net_root: tp.Optional[str] = None, **kwargs) -> None:
+#         super().__init__(*args, **kwargs)
+#         self.classes = None
 
-        if image_net_root is not None:
-            image_net = ImageNet(image_net_root, split='val')
-            self.classes = image_net.classes
+#         if image_net_root is not None:
+#             image_net = ImageNet(image_net_root, split='val')
+#             self.classes = image_net.classes
 
 
 class TipAdapterDataset(Dataset):
