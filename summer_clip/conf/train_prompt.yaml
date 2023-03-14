@@ -9,16 +9,16 @@ clip:
   model_name: RN50
 
 tokenizer:
-  # path: transformers.CLIPTokenizer
-  path: transformers.GPT2Tokenizer
-  # name: openai/clip-vit-base-patch32  # should not differ from large
-  name: gpt2-large
+  path: transformers.CLIPTokenizer
+  # path: transformers.GPT2Tokenizer
+  name: openai/clip-vit-base-patch32  # should not differ from large
+  # name: gpt2-large
   set_pad_as_eos: true
-  tokenize_classes_kwargs:
-    add_prefix_space: true
+  tokenize_classes_kwargs: {}
+    # add_prefix_space: true
 
 model:
-  use_clip_gpt: false
+  use_clip_gpt: true
   meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model_cfg.yaml
   state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
 
@@ -30,7 +30,7 @@ model:
 prompt_model:
   _target_: summer_clip.clip_prompt.autoprompt_learner.AutoPromptModel
   model_cfg:
-    num_cands: 64
+    num_cands: 16
     search_steps: 1
 
 # init_prompter:
@@ -40,7 +40,7 @@ prompt_model:
 
 init_prompter:
   _target_: summer_clip.clip_prompt.prompt_learner.InitRandomPrompter
-  length: 5
+  length: 10
 
 text_batcher:
   path: summer_clip.clip_prompt.prompt_learner.OneStrTextBatcher

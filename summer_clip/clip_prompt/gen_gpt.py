@@ -37,7 +37,9 @@ def load_pretrained_model(model_cfg_path: str, state_dict_path: str, map_locatio
     model_cfg = OmegaConf.load(model_cfg_path)
     assert isinstance(model_cfg, DictConfig)
     state_dict = torch.load(state_dict_path, map_location=map_location)
-    return load_pretrained(model_cfg, state_dict)
+    model = load_pretrained(model_cfg, state_dict)
+    model = model.to(map_location)
+    return model
 
 
 def load_gpt(model_cfg_path: str) -> AutoModelForCausalLM:
