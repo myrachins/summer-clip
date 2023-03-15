@@ -71,16 +71,16 @@ class AutoPromptModel(nn.Module):
         for _ in range(self.model_cfg.search_steps):
             labels, indexes = next(train_iter)
             with torch.no_grad():
-                curr_loss += self.compute_default_loss(labels, indexes)
+                loss, _, _ = self.compute_default_loss(labels, indexes)
+                curr_loss += loss
             for cand_ind, cand in enumerate(candidates):
                 cand_ids = copy(self.get_prompt_ids())
                 cand_embs = self.get_prompt_embs().clone()
                 cand_ids[token_to_flip] = cand
                 cand_embs[token_to_flip] = self.clip_embs[cand].detach().clone()
                 with torch.no_grad():
-                    cand_losses[cand_ind] += self.compute_loss(
-                        labels, indexes, cand_embs, cand_ids
-                    )
+                    loss, _, _ = self.compute_loss(labels, indexes, cand_embs, cand_ids)
+                    cand_losses[cand_ind] += loss
 
         best_cand = candidates[cand_losses.argmin()]
         best_cand_loss = cand_losses.min()

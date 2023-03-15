@@ -135,13 +135,20 @@ class PromptTrainer(BaseTrainer):
         return loss
 
     def compute_text_features(self, prompt_embs, prompt_ids):
-        clip_batch = self.collator.get_clip_input(
-            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
-            input_ids=self.token_classes
-        )
-        text_features = self.clip_text(**clip_batch)
-        text_features = text_features / text_features.norm(dim=1, keepdim=True)
-        return text_features
+        classes_batch_size = self.cfg.training.classes_batch_size
+        all_features = []
+        for begin_ind in range(0, len(self.token_classes), classes_batch_size):
+            end_ind = begin_ind + classes_batch_size
+            batch_classes = self.token_classes[begin_ind:end_ind]
+            clip_batch = self.collator.get_clip_input(
+                prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+                input_ids=batch_classes
+            )
+            text_features = self.clip_text(**clip_batch)
+            text_features = text_features / text_features.norm(dim=1, keepdim=True)
+            all_features.append(text_features)
+        all_features = torch.cat(all_features, dim=0)
+        return all_features
 
     def compute_clip_loss(self, labels, indexes, prompt_embs, prompt_ids):
         text_features = self.compute_text_features(prompt_embs, prompt_ids)
