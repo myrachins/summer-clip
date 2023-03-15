@@ -24,12 +24,27 @@ class GPTEmbed(nn.Module):
         return self.gpt(inputs_embeds=inputs_embeds, **kwargs)
 
 
-# class ClipTextEncoder(nn.Module):
-#     def __init__(self, clip_model: tp.Any) -> None:
-#         super().__init_()
-#         self.
+class ClipTextEncoder(nn.Module):
+    def __init__(self, clip_model: tp.Any, clip_tokenizer: tp.Any) -> None:
+        super().__init__()
+        self.transformer = clip_model.transformer
+        self.positional_embedding = clip_model.positional_embedding
+        self.ln_final = clip_model.ln_final
+        self.text_projection = clip_model.text_projection
+        self.eos_token_id = clip_tokenizer.eos_token_id
 
-#     def forward(self, inputs_embeds, input_ids):
+    def forward(self, inputs_embeds, input_ids, input_lens, **kwargs):
+        x = inputs_embeds + self.positional_embedding
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.ln_final(x)
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        last_token_ids = [input_len - 1 for input_len in input_lens]
+        x = x[torch.arange(x.shape[0]), last_token_ids] @ self.text_projection
+        ids = input_ids[torch.arange(x.shape[0]), last_token_ids]
+        assert (ids == self.eos_token_id).all(), "Last token should be EOS"
+        return x
 
 
 def make_langevin_optim(params: tp.Any, optim_cfg: DictConfig):
@@ -165,20 +180,34 @@ class LeftPromptCollator:
         self.eos_id = self.tokenizer.eos_token_id
         self.lm_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
 
+    def _create_batch(self, input_ids, prompt_embs):
+        batch = [dict(input_ids=i_ids, attention_mask=[1] * len(i_ids)) for i_ids in input_ids]
+        batch = self.lm_collator(batch)
+        batch = {key: val.to(prompt_embs.device) for key, val in batch.items()}
+        input_embs = self.embs(batch['input_ids'])
+        input_embs[:, 1:prompt_embs.shape[0] + 1, :] = prompt_embs.unsqueeze(0)
+        batch['inputs_embeds'] = input_embs
+        return batch
+
     def get_gpt_input(self, prompt_embs, prompt_ids, input_ids):
         prompt_ids = list(prompt_ids)
         input_ids = [
             [self.bos_id] + prompt_ids + list(i_ids)
             for i_ids in input_ids
         ]
-        lm_batch = [dict(input_ids=i_ids, attention_mask=[1] * len(i_ids)) for i_ids in input_ids]
-        lm_batch = self.lm_collator(lm_batch)
-        lm_batch = {key: val.to(prompt_embs.device) for key, val in lm_batch.items()}
-        input_embs = self.embs(lm_batch['input_ids'])
-        input_embs[:, 1:prompt_embs.shape[0] + 1, :] = prompt_embs.unsqueeze(0)
+        lm_batch = self._create_batch(input_ids, prompt_embs)
         lm_batch.pop('input_ids')
-        lm_batch['inputs_embeds'] = input_embs
         return lm_batch
+
+    def get_clip_input(self, prompt_embs, prompt_ids, input_ids):
+        prompt_ids = list(prompt_ids)
+        input_ids = [
+            [self.bos_id] + prompt_ids + list(i_ids) + [self.eos_id]
+            for i_ids in input_ids
+        ]
+        clip_batch = self._create_batch(input_ids, prompt_embs)
+        clip_batch['input_lens'] = [len(i_ids) for i_ids in input_ids]
+        return clip_batch
 
 
 class ImageTextBatcher:

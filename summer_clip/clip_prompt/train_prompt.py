@@ -18,7 +18,7 @@ from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_adapter.train_adapter import NoImageIndexedDataset
 from summer_clip.clip_prompt.gen_gpt import load_pretrained_model, load_gpt
-from summer_clip.clip_prompt.prompt_learner import GPTEmbed
+from summer_clip.clip_prompt.prompt_learner import GPTEmbed, ClipTextEncoder
 
 
 def save_epoch_model(prompts_items: list[tuple[tp.Any, tp.Any]], tokenizer: CLIPTokenizer,
@@ -82,6 +82,15 @@ class PromptTrainer(BaseTrainer):
             'train': DataLoader(self.dataset, **ld_cfg.train),  # type: ignore
         }
 
+    def setup_loss(self):
+        self.clip_loss = nn.CrossEntropyLoss()
+
+    def _load_clip_text(self):
+        clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
+        text_encoder = ClipTextEncoder(clip_model, self.tokenizer)
+        text_encoder = text_encoder.to(self.device)
+        return text_encoder
+
     def _load_gpt_model(self):
         model_cfg = self.cfg.model
         if model_cfg.get('use_clip_gpt', True):
@@ -98,8 +107,10 @@ class PromptTrainer(BaseTrainer):
 
     def setup_model(self):
         self.gpt, clip_embs = self._load_gpt_model()
+        self.clip_text = self._load_clip_text()
         set_requires_grad(self.gpt, requires_grad=False)
         set_requires_grad(clip_embs, requires_grad=False)
+        set_requires_grad(self.clip_text, requires_grad=False)
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
         self.text_batcher = load_obj(self.cfg.text_batcher.path)(
             token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
@@ -108,38 +119,81 @@ class PromptTrainer(BaseTrainer):
         self.model = hydra.utils.instantiate(
             self.cfg.prompt_model, trainer=self, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
         )
+        self.image_features = torch.load(self.cfg.clip.image_features_path, map_location='cpu')
+        self.image_features = self.image_features.t().contiguous()
+        self.image_features = self.image_features / self.image_features.norm(dim=1, keepdim=True)
         self.top_prompts = TopPrompter(max_size=self.cfg.training.max_top_prompts)
+
+    def compute_lm_loss(self, labels, prompt_embs, prompt_ids):
+        batch_classes = self.text_batcher.get_batch_classes(labels)
+        lm_batch = self.collator.get_gpt_input(
+            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+            input_ids=batch_classes
+        )
+        loss = self.gpt(**lm_batch).loss
+        return loss
+
+    def compute_text_features(self, prompt_embs, prompt_ids):
+        clip_batch = self.collator.get_clip_input(
+            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+            input_ids=self.token_classes
+        )
+        text_features = self.clip_text(**clip_batch)
+        text_features = text_features / text_features.norm(dim=1, keepdim=True)
+        return text_features
+
+    def compute_clip_loss(self, labels, indexes, prompt_embs, prompt_ids):
+        text_features = self.compute_text_features(prompt_embs, prompt_ids)
+        image_features = self.image_features[indexes].to(self.device)
+        logits = image_features @ text_features.t()
+        loss = self.clip_loss(logits, labels)
+        return loss
+
+    def compute_loss(self, labels, indexes, prompt_embs, prompt_ids):
+        clip_loss = self.compute_clip_loss(labels, indexes, prompt_embs, prompt_ids)
+        lm_loss = self.compute_lm_loss(labels, prompt_embs, prompt_ids)
+        loss = self.cfg.loss.clip * clip_loss + self.cfg.loss.fluency * lm_loss
+        return loss, clip_loss, lm_loss
+
+    def compute_default_loss(self, labels, indexes):
+        prompt_embs = self.model.get_prompt_embs()
+        prompt_ids = self.model.get_prompt_ids()
+        loss = self.compute_loss(labels, indexes, prompt_embs, prompt_ids)
+        return loss
+
+    def zero_grad(self):
+        self.clip_text.zero_grad()
+        self.gpt.zero_grad()
+        self.model.zero_grad()
+
+    def set_eval_models(self):
+        self.gpt.eval()
+        self.clip_text.eval()
 
     def train_epoch(self, epoch_num, epoch_info):
         train_cfg = self.cfg.training
         print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
-        gpt = self.gpt.eval()  # type: ignore
+        self.set_eval_models()
         avg_loss, completed_steps = 0., 0
 
         for step, (labels, indexes) in enumerate(tqdm(self.loaders['train']), start=1):
-            batch_classes = self.text_batcher.get_batch_classes(labels)
-            prompt_embs = self.model.get_prompt_embs()
-            prompt_ids = self.model.get_prompt_ids()
-            lm_batch = self.collator.get_gpt_input(
-                prompt_embs=prompt_embs, prompt_ids=prompt_ids,
-                input_ids=batch_classes
-            )
-            loss = gpt(**lm_batch).loss
+            loss, clip_loss, lm_loss = self.compute_default_loss(labels, indexes)
             loss = loss / train_cfg.gradient_accumulation_steps
             loss.backward()
             avg_loss += loss.item()
 
             if step % train_cfg.gradient_accumulation_steps == 0:
-                self.top_prompts.push(prompt_ids, avg_loss)
+                self.top_prompts.push(self.model.get_prompt_ids(), avg_loss)
                 self.model.step()
                 completed_steps += 1
                 avg_loss = 0.
-                gpt.zero_grad()
 
             if step % train_cfg.info_steps == 0:
                 self.logger.exp_logger.log({
                     "steps": completed_steps,
-                    "loss/train": loss.item()
+                    "loss/train": loss.item(),
+                    "loss/clip": clip_loss.item(),
+                    "loss/lm": lm_loss.item(),
                 })
 
         return epoch_info

@@ -4,16 +4,18 @@ defaults:
   - _self_
   - dataset: imagenet_train_no_image
   - prompting: tip_imagenet
+  - saved_paths: clip_paths
 
 clip:
   model_name: RN50
+  image_features_path: ${saved_paths.image_features.ImageNet_train-RN50}
 
 tokenizer:
   path: transformers.CLIPTokenizer
   # path: transformers.GPT2Tokenizer
   name: openai/clip-vit-base-patch32  # should not differ from large
   # name: gpt2-large
-  set_pad_as_eos: true
+  set_pad_as_eos: false
   tokenize_classes_kwargs: {}
     # add_prefix_space: true
 
@@ -56,6 +58,10 @@ data_loader:
 
 collator:
   _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
+
+loss:
+  clip: 1.0
+  fluency: 1.0
 
 training:
   epochs_num: 2

@@ -44,6 +44,8 @@ class AutoPromptModel(nn.Module):
         self.gpt = trainer.gpt
         self.text_batcher = trainer.text_batcher
         self.collator = trainer.collator
+        self.compute_loss = trainer.compute_loss
+        self.compute_default_loss = trainer.compute_default_loss
         self.clip_embs = clip_embs.weight.data
         self.prompt_ids = init_ids
         self.loader = trainer.loaders['train']
@@ -54,15 +56,6 @@ class AutoPromptModel(nn.Module):
 
     def get_prompt_ids(self) -> list[int]:
         return self.prompt_ids
-
-    def _compute_lm_loss(self, labels, prompt_embs, prompt_ids):
-        batch_classes = self.text_batcher.get_batch_classes(labels)
-        lm_batch = self.collator.get_gpt_input(
-            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
-            input_ids=batch_classes
-        )
-        loss = self.gpt(**lm_batch).loss
-        return loss
 
     def step(self):
         token_to_flip = random.randrange(self.prompt_embs.shape[0])
@@ -76,19 +69,17 @@ class AutoPromptModel(nn.Module):
         train_iter = iter(self.loader)
 
         for _ in range(self.model_cfg.search_steps):
-            labels, _ = next(train_iter)
+            labels, indexes = next(train_iter)
             with torch.no_grad():
-                curr_loss += self._compute_lm_loss(
-                    labels, self.get_prompt_embs(), self.get_prompt_ids()
-                )
+                curr_loss += self.compute_default_loss(labels, indexes)
             for cand_ind, cand in enumerate(candidates):
                 cand_ids = copy(self.get_prompt_ids())
                 cand_embs = self.get_prompt_embs().clone()
                 cand_ids[token_to_flip] = cand
                 cand_embs[token_to_flip] = self.clip_embs[cand].detach().clone()
                 with torch.no_grad():
-                    cand_losses[cand_ind] += self._compute_lm_loss(
-                        labels, cand_embs, cand_ids
+                    cand_losses[cand_ind] += self.compute_loss(
+                        labels, indexes, cand_embs, cand_ids
                     )
 
         best_cand = candidates[cand_losses.argmin()]
