@@ -87,7 +87,8 @@ class PromptTrainer(BaseTrainer):
 
     def _load_clip_text(self):
         clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
-        text_encoder = ClipTextEncoder(clip_model, self.tokenizer)
+        clip_model = clip_model.float()
+        text_encoder = ClipTextEncoder(clip_model)
         text_encoder = text_encoder.to(self.device)
         return text_encoder
 
@@ -120,7 +121,7 @@ class PromptTrainer(BaseTrainer):
             self.cfg.prompt_model, trainer=self, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
         )
         self.image_features = torch.load(self.cfg.clip.image_features_path, map_location='cpu')
-        self.image_features = self.image_features.t().contiguous()
+        self.image_features = self.image_features.float().t().contiguous()
         self.image_features = self.image_features / self.image_features.norm(dim=1, keepdim=True)
         self.top_prompts = TopPrompter(max_size=self.cfg.training.max_top_prompts)
 

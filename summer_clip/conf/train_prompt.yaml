@@ -45,26 +45,26 @@ init_prompter:
   length: 5
 
 text_batcher:
-  path: summer_clip.clip_prompt.prompt_learner.OneStrTextBatcher
-  kwargs:
-    class_str: lion
+  path: summer_clip.clip_prompt.prompt_learner.ImageTextBatcher
+  kwargs: {}
 
 data_loader:
   train:
-    batch_size: 20480
+    batch_size: 4
     shuffle: true
     pin_memory: true
     num_workers: 4
 
 collator:
   _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
+  clip_seq_len: 77
 
 loss:
   clip: 1.0
   fluency: 1.0
 
 training:
-  epochs_num: 2
+  epochs_num: 1
   info_steps: 1
   max_top_prompts: 50
   gradient_accumulation_steps: 1

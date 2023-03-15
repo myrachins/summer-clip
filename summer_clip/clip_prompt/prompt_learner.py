@@ -25,16 +25,15 @@ class GPTEmbed(nn.Module):
 
 
 class ClipTextEncoder(nn.Module):
-    def __init__(self, clip_model: tp.Any, clip_tokenizer: tp.Any) -> None:
+    def __init__(self, clip_model: tp.Any) -> None:
         super().__init__()
         self.transformer = clip_model.transformer
         self.positional_embedding = clip_model.positional_embedding
         self.ln_final = clip_model.ln_final
         self.text_projection = clip_model.text_projection
-        self.eos_token_id = clip_tokenizer.eos_token_id
 
-    def forward(self, inputs_embeds, input_ids, input_lens, **kwargs):
-        x = inputs_embeds + self.positional_embedding
+    def forward(self, inputs_embeds, input_lens, **kwargs):
+        x = inputs_embeds + self.positional_embedding.unsqueeze(0)
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
@@ -42,8 +41,6 @@ class ClipTextEncoder(nn.Module):
         # x.shape = [batch_size, n_ctx, transformer.width]
         last_token_ids = [input_len - 1 for input_len in input_lens]
         x = x[torch.arange(x.shape[0]), last_token_ids] @ self.text_projection
-        ids = input_ids[torch.arange(x.shape[0]), last_token_ids]
-        assert (ids == self.eos_token_id).all(), "Last token should be EOS"
         return x
 
 
@@ -172,17 +169,18 @@ class InitRandomPrompter:
 
 
 class LeftPromptCollator:
-    def __init__(self, tokenizer, embs) -> None:
+    def __init__(self, tokenizer, embs, clip_seq_len) -> None:
         self.tokenizer = tokenizer
         self.embs = embs
 
         self.bos_id = self.tokenizer.bos_token_id
         self.eos_id = self.tokenizer.eos_token_id
         self.lm_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False)
+        self.clip_collator = DataCollatorForLanguageModeling(tokenizer, mlm=False, pad_to_multiple_of=clip_seq_len)
 
-    def _create_batch(self, input_ids, prompt_embs):
+    def _create_batch(self, input_ids, prompt_embs, collator):
         batch = [dict(input_ids=i_ids, attention_mask=[1] * len(i_ids)) for i_ids in input_ids]
-        batch = self.lm_collator(batch)
+        batch = collator(batch)
         batch = {key: val.to(prompt_embs.device) for key, val in batch.items()}
         input_embs = self.embs(batch['input_ids'])
         input_embs[:, 1:prompt_embs.shape[0] + 1, :] = prompt_embs.unsqueeze(0)
@@ -195,7 +193,7 @@ class LeftPromptCollator:
             [self.bos_id] + prompt_ids + list(i_ids)
             for i_ids in input_ids
         ]
-        lm_batch = self._create_batch(input_ids, prompt_embs)
+        lm_batch = self._create_batch(input_ids, prompt_embs, self.lm_collator)
         lm_batch.pop('input_ids')
         return lm_batch
 
@@ -205,7 +203,7 @@ class LeftPromptCollator:
             [self.bos_id] + prompt_ids + list(i_ids) + [self.eos_id]
             for i_ids in input_ids
         ]
-        clip_batch = self._create_batch(input_ids, prompt_embs)
+        clip_batch = self._create_batch(input_ids, prompt_embs, self.clip_collator)
         clip_batch['input_lens'] = [len(i_ids) for i_ids in input_ids]
         return clip_batch
 
