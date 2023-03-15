@@ -6,6 +6,7 @@ import clip
 import torch
 import torch.utils
 import hydra
+from munch import Munch
 from tqdm import tqdm
 from torch import nn
 from omegaconf import DictConfig, OmegaConf
@@ -21,10 +22,10 @@ from summer_clip.clip_prompt.gen_gpt import load_pretrained_model, load_gpt
 from summer_clip.clip_prompt.prompt_learner import GPTEmbed, ClipTextEncoder
 
 
-def save_epoch_model(prompts_items: list[tuple[tp.Any, tp.Any]], tokenizer: CLIPTokenizer,
-                     epoch_num: int, checkpoints_dir: Path) -> None:
-    epoch_dir = checkpoints_dir / f'epoch_{epoch_num}'
-    epoch_dir.mkdir(parents=True, exist_ok=True)
+def save_step_prompts(prompts_items: list[tuple[tp.Any, tp.Any]], tokenizer: CLIPTokenizer,
+                      epoch_num: int, step: int, checkpoints_dir: Path) -> None:
+    step_dir = checkpoints_dir / f'epoch_{epoch_num}' / f'step_{step}'
+    step_dir.mkdir(parents=True, exist_ok=True)
 
     def get_prompt_tokens(prompt_ids: tp.Any) -> list[str]:
         return [tokenizer.decoder[prompt_id] for prompt_id in prompt_ids]
@@ -34,7 +35,7 @@ def save_epoch_model(prompts_items: list[tuple[tp.Any, tp.Any]], tokenizer: CLIP
         for p_ids, loss in prompts_items
     ]
     epoch_cfg = OmegaConf.create(records)
-    OmegaConf.save(epoch_cfg, epoch_dir / 'prompts.yaml')
+    OmegaConf.save(epoch_cfg, step_dir / 'prompts.yaml')
 
 
 def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
@@ -150,24 +151,25 @@ class PromptTrainer(BaseTrainer):
         all_features = torch.cat(all_features, dim=0)
         return all_features
 
-    def compute_clip_loss(self, labels, indexes, prompt_embs, prompt_ids):
+    def compute_clip_metrics(self, labels, indexes, prompt_embs, prompt_ids):
         text_features = self.compute_text_features(prompt_embs, prompt_ids)
         image_features = self.image_features[indexes].to(self.device)
         logits = image_features @ text_features.t()
+        labels = labels.to(self.device)
         loss = self.clip_loss(logits, labels)
-        return loss
+        acc1, acc5 = compute_accuracy(logits, labels)
+        return loss, acc1, acc5
 
-    def compute_loss(self, labels, indexes, prompt_embs, prompt_ids):
-        clip_loss = self.compute_clip_loss(labels, indexes, prompt_embs, prompt_ids)
+    def compute_metrics(self, labels, indexes, prompt_embs, prompt_ids):
+        clip_loss, acc1, acc5 = self.compute_clip_metrics(labels, indexes, prompt_embs, prompt_ids)
         lm_loss = self.compute_lm_loss(labels, prompt_embs, prompt_ids)
         loss = self.cfg.loss.clip * clip_loss + self.cfg.loss.fluency * lm_loss
-        return loss, clip_loss, lm_loss
+        return Munch(loss=loss, clip_loss=clip_loss, lm_loss=lm_loss, acc1=acc1, acc5=acc5)
 
-    def compute_default_loss(self, labels, indexes):
+    def compute_default_metrics(self, labels, indexes):
         prompt_embs = self.model.get_prompt_embs()
         prompt_ids = self.model.get_prompt_ids()
-        loss = self.compute_loss(labels, indexes, prompt_embs, prompt_ids)
-        return loss
+        return self.compute_metrics(labels, indexes, prompt_embs, prompt_ids)
 
     def zero_grad(self):
         self.clip_text.zero_grad()
@@ -185,7 +187,8 @@ class PromptTrainer(BaseTrainer):
         avg_loss, completed_steps = 0., 0
 
         for step, (labels, indexes) in enumerate(tqdm(self.loaders['train']), start=1):
-            loss, clip_loss, lm_loss = self.compute_default_loss(labels, indexes)
+            metrics = self.compute_default_metrics(labels, indexes)
+            loss = metrics.loss
             loss = loss / train_cfg.gradient_accumulation_steps
             loss.backward()
             avg_loss += loss.item()
@@ -199,18 +202,22 @@ class PromptTrainer(BaseTrainer):
             if step % train_cfg.info_steps == 0:
                 self.logger.exp_logger.log({
                     "steps": completed_steps,
-                    "loss/train": loss.item(),
-                    "loss/clip": clip_loss.item(),
-                    "loss/lm": lm_loss.item(),
+                    "loss/train": metrics.loss.item(),
+                    "loss/clip": metrics.clip_loss.item(),
+                    "loss/lm": metrics.lm_loss.item(),
+                    "acc/top1": metrics.acc1,
+                    "acc/top5": metrics.acc5,
                 })
+
+            if step % train_cfg.save_steps == 0 or step == len(self.loaders['train']):
+                save_step_prompts(
+                    self.top_prompts.items(), self.tokenizer, epoch_num, step,
+                    Path(self.cfg.training.checkpoints_dir)
+                )
 
         return epoch_info
 
     def save_epoch_model(self, epoch_num):
-        save_epoch_model(
-            self.top_prompts.items(), self.tokenizer, epoch_num,
-            Path(self.cfg.training.checkpoints_dir)
-        )
         if self.cfg.training.new_top_prompts_each_epoch:
             self.top_prompts.clear()
 

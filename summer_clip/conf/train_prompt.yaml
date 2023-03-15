@@ -42,7 +42,7 @@ prompt_model:
 
 init_prompter:
   _target_: summer_clip.clip_prompt.prompt_learner.InitRandomPrompter
-  length: 5
+  length: 16
 
 text_batcher:
   path: summer_clip.clip_prompt.prompt_learner.ImageTextBatcher
@@ -50,7 +50,7 @@ text_batcher:
 
 data_loader:
   train:
-    batch_size: 64
+    batch_size: 6
     shuffle: true
     pin_memory: true
     num_workers: 4
@@ -66,7 +66,8 @@ loss:
 training:
   epochs_num: 1
   info_steps: 1
-  classes_batch_size: 64
+  save_steps: 20
+  classes_batch_size: 8
   max_top_prompts: 50
   gradient_accumulation_steps: 1
   new_top_prompts_each_epoch: false
@@ -76,5 +77,5 @@ log:
   calculate_every: 1
 
 exp:
-  project: train_prompt
+  project: train_clip_prompt
   name: prompt_v1

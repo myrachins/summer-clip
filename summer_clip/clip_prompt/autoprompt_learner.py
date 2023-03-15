@@ -44,8 +44,8 @@ class AutoPromptModel(nn.Module):
         self.gpt = trainer.gpt
         self.text_batcher = trainer.text_batcher
         self.collator = trainer.collator
-        self.compute_loss = trainer.compute_loss
-        self.compute_default_loss = trainer.compute_default_loss
+        self.compute_metrics = trainer.compute_metrics
+        self.compute_default_metrics = trainer.compute_default_metrics
         self.clip_embs = clip_embs.weight.data
         self.prompt_ids = init_ids
         self.loader = trainer.loaders['train']
@@ -71,16 +71,16 @@ class AutoPromptModel(nn.Module):
         for _ in range(self.model_cfg.search_steps):
             labels, indexes = next(train_iter)
             with torch.no_grad():
-                loss, _, _ = self.compute_default_loss(labels, indexes)
-                curr_loss += loss
+                curr_loss += self.compute_default_metrics(labels, indexes).loss
             for cand_ind, cand in enumerate(candidates):
                 cand_ids = copy(self.get_prompt_ids())
                 cand_embs = self.get_prompt_embs().clone()
                 cand_ids[token_to_flip] = cand
                 cand_embs[token_to_flip] = self.clip_embs[cand].detach().clone()
                 with torch.no_grad():
-                    loss, _, _ = self.compute_loss(labels, indexes, cand_embs, cand_ids)
-                    cand_losses[cand_ind] += loss
+                    cand_losses[cand_ind] += self.compute_metrics(
+                        labels, indexes, cand_embs, cand_ids
+                    ).loss
 
         best_cand = candidates[cand_losses.argmin()]
         best_cand_loss = cand_losses.min()
