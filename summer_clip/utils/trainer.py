@@ -23,6 +23,9 @@ class BaseTrainer:
     def eval_mode(self):
         self.model.eval()  # type: ignore
 
+    def setup_device(self):
+        self.device = torch.device(self.cfg.meta.device)
+
     def setup_logger(self):
         config_for_logger = OmegaConf.to_container(self.cfg)
         config_for_logger["PID"] = os.getpid()  # type: ignore
@@ -57,6 +60,7 @@ class BaseTrainer:
         pass
 
     def setup(self):
+        self.setup_device()
         self.setup_logger()
         self.setup_dataset()
         self.setup_loaders()

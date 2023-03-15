@@ -8,7 +8,6 @@ import torch.utils
 import hydra
 from tqdm import tqdm
 from torch import nn
-from accelerate import Accelerator
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
 from transformers import CLIPTokenizer
@@ -36,19 +35,6 @@ def save_epoch_model(prompts_items: list[tuple[tp.Any, tp.Any]], tokenizer: CLIP
     ]
     epoch_cfg = OmegaConf.create(records)
     OmegaConf.save(epoch_cfg, epoch_dir / 'prompts.yaml')
-
-
-def get_grouped_params(model: ClipGPT, weight_decay: float, no_decay: tuple[str, ...] = ("bias", "LayerNorm.weight")):
-    params_with_wd, params_without_wd = [], []
-    for n, p in model.named_parameters():
-        if any(nd in n for nd in no_decay):
-            params_without_wd.append(p)
-        else:
-            params_with_wd.append(p)
-    return [
-        {"params": params_with_wd, "weight_decay": weight_decay},
-        {"params": params_without_wd, "weight_decay": 0.0},
-    ]
 
 
 def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
@@ -101,12 +87,12 @@ class PromptTrainer(BaseTrainer):
         if model_cfg.get('use_clip_gpt', True):
             clip_gpt = load_pretrained_model(
                 self.cfg.model.meta_cfg_path, self.cfg.model.state_dict_path,
-                map_location=self.accelerator.device
+                map_location=self.device
             )
             gpt = GPTEmbed(clip_gpt.gpt)
             embs = clip_gpt.gpt.transformer.wte.emb
         else:
-            gpt = load_gpt(self.cfg.model.meta_cfg_path).to(self.accelerator.device)  # type: ignore
+            gpt = load_gpt(self.cfg.model.meta_cfg_path).to(self.device)  # type: ignore
             embs = gpt.transformer.wte  # type: ignore
         return gpt, embs
 
@@ -124,52 +110,13 @@ class PromptTrainer(BaseTrainer):
         )
         self.top_prompts = TopPrompter(max_size=self.cfg.training.max_top_prompts)
 
-    def setup_optimizer(self):
-        opt_cfg = self.cfg.optim
-        params = get_grouped_params(self.model, weight_decay=opt_cfg.weight_decay)
-        self.optimizer = load_obj(opt_cfg.optimizer.path)(params=params, **opt_cfg.optimizer.kwargs)
-
-    def setup_scheduler(self):
-        sch_cfg = self.cfg.scheduler
-        num_training_steps = (
-            (self.cfg.training.epochs_num * len(self.loaders['train']))
-            // self.accelerator.gradient_accumulation_steps  # noqa: W503
-        )
-        num_warmup_steps = int(num_training_steps * sch_cfg.warmup_part)
-        get_scheduler = load_obj(sch_cfg.get_scheduler_fun)
-        self.scheduler = get_scheduler(
-            name=sch_cfg.name,
-            optimizer=self.optimizer,
-            num_warmup_steps=num_warmup_steps,
-            num_training_steps=num_training_steps
-        )
-
-    def setup_accelerator(self):
-        self.accelerator = Accelerator(**self.cfg.accelerator)
-
-    def apply_accelerator(self):
-        # Val loader should not be sent to 'prepare': problem with the 'end_of_dataloader' state
-        # Alternatively could be resolved via restoring states after the evaluation:
-        # self.accelerator.gradient_state._set_remainder(remainder)
-        # self.accelerator.gradient_state._set_end_of_dataloader(end_of_dataloader)
-        self.gpt, self.model, self.optimizer, self.loaders['train'], self.scheduler = self.accelerator.prepare(
-            self.gpt, self.model, self.optimizer, self.loaders['train'], self.scheduler
-        )
-
-    def setup(self):
-        self.setup_accelerator()
-        super().setup()
-        self.apply_accelerator()
-
     def train_epoch(self, epoch_num, epoch_info):
         train_cfg = self.cfg.training
-        self.accelerator.print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
+        print(f'Running epoch {epoch_num}/{train_cfg.epochs_num}...')
         gpt = self.gpt.eval()  # type: ignore
-        sum_loss, no_grad_steps, completed_steps = 0., 0, 0
+        avg_loss, completed_steps = 0., 0
 
-        for step, (labels, indexes) in enumerate(
-            tqdm(self.loaders['train'], disable=not self.accelerator.is_local_main_process), start=1
-        ):
+        for step, (labels, indexes) in enumerate(tqdm(self.loaders['train']), start=1):
             batch_classes = self.text_batcher.get_batch_classes(labels)
             prompt_embs = self.model.get_prompt_embs()
             prompt_ids = self.model.get_prompt_ids()
@@ -177,26 +124,20 @@ class PromptTrainer(BaseTrainer):
                 prompt_embs=prompt_embs, prompt_ids=prompt_ids,
                 input_ids=batch_classes
             )
-            with self.accelerator.accumulate(gpt):
-                loss = gpt(**lm_batch).loss
-                self.accelerator.backward(loss)
-                # self.optimizer.step()
-                # self.scheduler.step()
-                sum_loss += loss.item()
-                no_grad_steps += 1
-                if self.accelerator.sync_gradients:
-                    avg_loss = sum_loss / no_grad_steps
-                    self.top_prompts.push(prompt_ids, avg_loss)
-                    self.model.step()
-                    completed_steps += 1
-                    sum_loss, no_grad_steps = 0., 0
-                self.optimizer.zero_grad()
+            loss = gpt(**lm_batch).loss
+            loss = loss / train_cfg.gradient_accumulation_steps
+            loss.backward()
+            avg_loss += loss.item()
+
+            if step % train_cfg.gradient_accumulation_steps == 0:
+                self.top_prompts.push(prompt_ids, avg_loss)
+                self.model.step()
+                completed_steps += 1
+                avg_loss = 0.
+                gpt.zero_grad()
 
             if step % train_cfg.info_steps == 0:
                 self.logger.exp_logger.log({
-                    "lr": self.scheduler.get_last_lr()[0],
-                    "beta": (self.scheduler.get_last_beta()[0]
-                             if hasattr(self.scheduler, 'get_last_beta') else None),
                     "steps": completed_steps,
                     "loss/train": loss.item()
                 })
@@ -204,13 +145,12 @@ class PromptTrainer(BaseTrainer):
         return epoch_info
 
     def save_epoch_model(self, epoch_num):
-        if self.accelerator.is_main_process:
-            save_epoch_model(
-                self.top_prompts.items(), self.tokenizer, epoch_num,
-                Path(self.cfg.training.checkpoints_dir)
-            )
-            if self.cfg.training.new_top_prompts_each_epoch:
-                self.top_prompts.clear()
+        save_epoch_model(
+            self.top_prompts.items(), self.tokenizer, epoch_num,
+            Path(self.cfg.training.checkpoints_dir)
+        )
+        if self.cfg.training.new_top_prompts_each_epoch:
+            self.top_prompts.clear()
 
 
 @hydra.main(config_path='../conf', config_name='train_prompt', version_base='1.1')
