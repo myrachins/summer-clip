@@ -160,7 +160,7 @@ class PromptTrainer(BaseTrainer):
         acc1, acc5 = compute_accuracy(logits, labels)
         return loss, acc1, acc5
 
-    def compute_metrics(self, labels, indexes, prompt_embs, prompt_ids):
+    def compute_full_metrics(self, labels, indexes, prompt_embs, prompt_ids):
         clip_loss, acc1, acc5 = self.compute_clip_metrics(labels, indexes, prompt_embs, prompt_ids)
         lm_loss = self.compute_lm_loss(labels, prompt_embs, prompt_ids)
         loss = self.cfg.loss.clip * clip_loss + self.cfg.loss.fluency * lm_loss
@@ -169,7 +169,7 @@ class PromptTrainer(BaseTrainer):
     def compute_default_metrics(self, labels, indexes):
         prompt_embs = self.model.get_prompt_embs()
         prompt_ids = self.model.get_prompt_ids()
-        return self.compute_metrics(labels, indexes, prompt_embs, prompt_ids)
+        return self.compute_full_metrics(labels, indexes, prompt_embs, prompt_ids)
 
     def zero_grad(self):
         self.clip_text.zero_grad()

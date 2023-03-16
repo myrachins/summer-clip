@@ -14,6 +14,6 @@ export HF_DATASETS_OFFLINE=1
 export PYTHONUNBUFFERED=1
 
 cd $SUMMER_CLIP_PATH || exit
-accelerate launch --config_file $ACCELERATE_CFG_PATH $PY_PATH
-# python -u $PY_PATH
+# accelerate launch --config_file $ACCELERATE_CFG_PATH $PY_PATH
+python -u $PY_PATH
 # kernprof -l $PY_PATH
