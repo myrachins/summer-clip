@@ -33,7 +33,7 @@ prompt_model:
   _target_: summer_clip.clip_prompt.autoprompt_learner.AutoPromptModel
   model_cfg:
     num_cands: 16
-    search_steps: 1
+    search_steps: 4
 
 # init_prompter:
 #   _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
@@ -50,7 +50,7 @@ text_batcher:
 
 data_loader:
   train:
-    batch_size: 6
+    batch_size: 16
     shuffle: true
     pin_memory: true
     num_workers: 4
@@ -64,12 +64,12 @@ collator:
 
 loss:
   clip: 1.0
-  fluency: 1.0
+  fluency: 0.1
 
 training:
-  epochs_num: 1
+  epochs_num: 100
   info_steps: 1
-  save_steps: 20
+  save_steps: null
   classes_batch_size: 10
   max_top_prompts: 50
   gradient_accumulation_steps: 1
