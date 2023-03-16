@@ -209,7 +209,7 @@ class PromptTrainer(BaseTrainer):
                     "acc/top5": metrics.acc5,
                 })
 
-            if step % train_cfg.save_steps == 0 or step == len(self.loaders['train']):
+            if (train_cfg.save_steps is not None and step % train_cfg.save_steps == 0) or step == len(self.loaders['train']):
                 save_step_prompts(
                     self.top_prompts.items(), self.tokenizer, epoch_num, step,
                     Path(self.cfg.training.checkpoints_dir)
