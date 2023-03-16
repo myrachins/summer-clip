@@ -17,7 +17,7 @@ from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.clip_prompt.gpt import ClipGPT
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
-from summer_clip.clip_adapter.train_adapter import NoImageIndexedDataset
+from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset
 from summer_clip.clip_prompt.gen_gpt import load_pretrained_model, load_gpt
 from summer_clip.clip_prompt.prompt_learner import GPTEmbed, ClipTextEncoder
 
@@ -64,7 +64,7 @@ class TopPrompter:
 class PromptTrainer(BaseTrainer):
     def setup_dataset(self):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
-        self.dataset = NoImageIndexedDataset(self.source_dataset)
+        self.dataset = NoImageBalancedIndexedDataset(self.source_dataset, self.cfg.dataset_info.k_shots)
 
         tokenizer_class = load_obj(self.cfg.tokenizer.path)
         self.tokenizer = tokenizer_class.from_pretrained(self.cfg.tokenizer.name)

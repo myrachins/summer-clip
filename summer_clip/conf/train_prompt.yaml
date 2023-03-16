@@ -2,13 +2,13 @@ defaults:
   - hydra_setup
   - meta_setup
   - _self_
-  - dataset: imagenet_train_no_image
-  - prompting: tip_imagenet
+  - dataset: tip_eurosat_train_no_image
+  - prompting: tip_eurosat
   - saved_paths: clip_paths
 
 clip:
   model_name: RN50
-  image_features_path: ${saved_paths.image_features.ImageNet_train-RN50}
+  image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
 
 tokenizer:
   path: transformers.CLIPTokenizer
@@ -55,6 +55,9 @@ data_loader:
     pin_memory: true
     num_workers: 4
 
+dataset_info:
+  k_shots: 16
+
 collator:
   _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
   clip_seq_len: 77
@@ -67,7 +70,7 @@ training:
   epochs_num: 1
   info_steps: 1
   save_steps: 20
-  classes_batch_size: 8
+  classes_batch_size: 10
   max_top_prompts: 50
   gradient_accumulation_steps: 1
   new_top_prompts_each_epoch: false

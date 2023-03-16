@@ -1,8 +1,10 @@
+import random
 import itertools
 import logging
 import typing as tp
 from pathlib import Path
 from copy import copy
+from collections import defaultdict
 from abc import ABC, abstractmethod
 
 import torch
@@ -127,6 +129,27 @@ class NoImageIndexedDataset(Dataset):
 
     def __getitem__(self, index):
         _, label = self.source_dataset[index]
+        return label, index
+
+
+class NoImageBalancedIndexedDataset(Dataset):
+    def __init__(self, source_dataset, k_shots: int) -> None:
+        super().__init__()
+        label_to_indexes = defaultdict(list)
+        for index in range(len(source_dataset)):
+            _, label = source_dataset[index]
+            label_to_indexes[label].append(index)
+
+        self.items = []
+        for label, indexes in label_to_indexes.items():
+            k_indexes = random.sample(indexes, k_shots)
+            self.items.extend((label, index) for index in k_indexes)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index):
+        label, index = self.items[index]
         return label, index
 
 
