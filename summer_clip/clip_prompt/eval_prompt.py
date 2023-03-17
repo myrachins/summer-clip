@@ -61,7 +61,7 @@ class PromptEvaluator(BaseTrainer):
         assert (self.cfg.prompts_ids is None) ^ (self.cfg.prompts_texts is None), "Only one is allowed: text or ids"
         self.token_prompts = self.cfg.prompts_ids
         if self.token_prompts is None:
-            self.token_prompts = self.tokenizer(self.cfg.prompts_texts, add_special_tokens=False)['input_ids']
+            self.token_prompts = self.tokenizer(list(self.cfg.prompts_texts), add_special_tokens=False)['input_ids']
 
     def setup_model(self):
         self.clip_model, _ = clip.load(self.cfg.clip.model_name, device=self.device, jit=False)
