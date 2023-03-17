@@ -1,0 +1,42 @@
+defaults:
+  - hydra_setup
+  - meta_setup
+  - _self_
+  - dataset: tip_eurosat_test_no_image
+  - prompting: tip_eurosat
+  - saved_paths: clip_paths
+
+clip:
+  model_name: RN50
+  image_features_path: ${saved_paths.image_features.EuroSAT_tip_test-RN50}
+
+tokenizer:
+  path: transformers.CLIPTokenizer
+  name: openai/clip-vit-base-patch32  # should not differ from large
+
+prompts_ids:
+  - - 21936
+    - 35407
+    - 26285
+    - 25887
+    - 26662
+    - 38266
+    - 24092
+    - 36489
+    - 41811
+    - 49169
+    - 10539
+    - 46190
+    - 28283
+    - 41873
+    - 8511
+    - 17877
+
+prompts_texts: null
+
+data_loader:
+  val:
+    batch_size: 64
+    shuffle: false
+    pin_memory: true
+    num_workers: 4
