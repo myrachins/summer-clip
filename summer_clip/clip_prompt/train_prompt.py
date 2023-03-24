@@ -196,6 +196,7 @@ class PromptTrainer(BaseTrainer):
             if step % train_cfg.gradient_accumulation_steps == 0:
                 self.top_prompts.push(self.model.get_prompt_ids(), avg_loss)
                 self.model.step()
+                self.zero_grad()
                 completed_steps += 1
                 avg_loss = 0.
 
