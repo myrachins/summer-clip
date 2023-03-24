@@ -36,9 +36,9 @@ prompt_model:
     search_steps: 4
 
 # init_prompter:
-#   _target_: summer_clip.clip_prompt.prompt_learner.InitNumTokensPrompter
-#   token: <|startoftext|>
-#   length: 5
+#   _target_: summer_clip.clip_prompt.prompt_learner.InitTextPrompter
+#   text: a centered satellite photo of
+#   assert_length: 5
 
 init_prompter:
   _target_: summer_clip.clip_prompt.prompt_learner.InitRandomPrompter
