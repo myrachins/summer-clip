@@ -3,12 +3,14 @@ defaults:
   - meta_setup
   - _self_
   - dataset: tip_eurosat_train_no_image
+  - dataset@val_dataset: tip_eurosat_test_no_image
   - prompting: tip_eurosat
   - saved_paths: clip_paths
 
 clip:
   model_name: RN50
   image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
+  val_image_features_path: ${saved_paths.image_features.EuroSAT_tip_test-RN50}
 
 tokenizer:
   path: transformers.CLIPTokenizer
@@ -54,6 +56,11 @@ data_loader:
     shuffle: true
     pin_memory: true
     num_workers: 4
+  val:
+    batch_size: 32
+    shuffle: true
+    pin_memory: true
+    num_workers: 4
 
 dataset_info:
   k_shots: 16
@@ -64,7 +71,7 @@ collator:
 
 loss:
   clip: 1.0
-  fluency: 0.1
+  fluency: 0.
 
 training:
   epochs_num: 100

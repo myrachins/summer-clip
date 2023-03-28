@@ -17,7 +17,8 @@ from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.clip_prompt.gpt import ClipGPT
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
-from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset
+from summer_clip.clip_prompt.train_coop import compute_accuracy_loader
+from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset, NoImageIndexedDataset
 from summer_clip.clip_prompt.gen_gpt import load_pretrained_model, load_gpt
 from summer_clip.clip_prompt.prompt_learner import GPTEmbed, ClipTextEncoder
 
@@ -66,6 +67,9 @@ class PromptTrainer(BaseTrainer):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
         self.dataset = NoImageBalancedIndexedDataset(self.source_dataset, self.cfg.dataset_info.k_shots)
 
+        self.source_val_dataset = hydra.utils.instantiate(self.cfg.val_dataset)
+        self.val_dataset = NoImageIndexedDataset(self.source_val_dataset)
+
         tokenizer_class = load_obj(self.cfg.tokenizer.path)
         self.tokenizer = tokenizer_class.from_pretrained(self.cfg.tokenizer.name)
         if self.cfg.tokenizer.set_pad_as_eos:
@@ -81,6 +85,7 @@ class PromptTrainer(BaseTrainer):
         ld_cfg = self.cfg.data_loader
         self.loaders = {
             'train': DataLoader(self.dataset, **ld_cfg.train),  # type: ignore
+            'val': DataLoader(self.val_dataset, **ld_cfg.val),  # type: ignore
         }
 
     def setup_loss(self):
@@ -91,7 +96,8 @@ class PromptTrainer(BaseTrainer):
         clip_model = clip_model.float()
         text_encoder = ClipTextEncoder(clip_model)
         text_encoder = text_encoder.to(self.device)
-        return text_encoder
+        logit_scale = clip_model.logit_scale.to(self.device).detach()
+        return text_encoder, logit_scale
 
     def _load_gpt_model(self):
         model_cfg = self.cfg.model
@@ -107,9 +113,15 @@ class PromptTrainer(BaseTrainer):
             embs = gpt.transformer.wte  # type: ignore
         return gpt, embs
 
+    def _load_image_features(self, image_features_path):
+        image_features = torch.load(image_features_path, map_location='cpu')
+        image_features = image_features.float().t().contiguous()
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        return image_features
+
     def setup_model(self):
         self.gpt, clip_embs = self._load_gpt_model()
-        self.clip_text = self._load_clip_text()
+        self.clip_text, self.logit_scale = self._load_clip_text()
         set_requires_grad(self.gpt, requires_grad=False)
         set_requires_grad(clip_embs, requires_grad=False)
         set_requires_grad(self.clip_text, requires_grad=False)
@@ -121,9 +133,8 @@ class PromptTrainer(BaseTrainer):
         self.model = hydra.utils.instantiate(
             self.cfg.prompt_model, trainer=self, clip_embs=clip_embs, init_ids=init_prompter.get_ids(self.tokenizer)
         )
-        self.image_features = torch.load(self.cfg.clip.image_features_path, map_location='cpu')
-        self.image_features = self.image_features.float().t().contiguous()
-        self.image_features = self.image_features / self.image_features.norm(dim=1, keepdim=True)
+        self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
+        self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
         self.top_prompts = TopPrompter(max_size=self.cfg.training.max_top_prompts)
 
     def compute_lm_loss(self, labels, prompt_embs, prompt_ids):
@@ -151,10 +162,15 @@ class PromptTrainer(BaseTrainer):
         all_features = torch.cat(all_features, dim=0)
         return all_features
 
+    def compute_logits(self, image_features, text_features):
+        logit_scale = self.logit_scale.exp()
+        logits = logit_scale * image_features @ text_features.t()
+        return logits
+
     def compute_clip_metrics(self, labels, indexes, prompt_embs, prompt_ids):
         text_features = self.compute_text_features(prompt_embs, prompt_ids)
         image_features = self.image_features[indexes].to(self.device)
-        logits = image_features @ text_features.t()
+        logits = self.compute_logits(image_features, text_features)
         labels = labels.to(self.device)
         loss = self.clip_loss(logits, labels)
         acc1, acc5 = compute_accuracy(logits, labels)
@@ -218,7 +234,22 @@ class PromptTrainer(BaseTrainer):
 
         return epoch_info
 
+    def evaluate_val_model(self):
+        self.model.eval()
+        text_features = self.compute_text_features(
+            self.model.get_prompt_embs(), self.model.get_prompt_ids()
+        )
+        acc1, acc5 = compute_accuracy_loader(
+            self.val_image_features, text_features, self.loaders['val'], self.device
+        )
+        self.logger.exp_logger.log({
+            "eval/acc1": acc1,
+            "eval/acc5": acc5,
+        })
+
     def save_epoch_model(self, epoch_num):
+        print('Evaluating and saving...')
+        self.evaluate_val_model()
         if self.cfg.training.new_top_prompts_each_epoch:
             self.top_prompts.clear()
 
