@@ -3,12 +3,14 @@ defaults:
   - meta_setup
   - _self_
   - dataset: tip_eurosat_train_no_image
+  - dataset@val_dataset: tip_eurosat_test_no_image
   - prompting: tip_eurosat
   - saved_paths: clip_paths
 
 clip:
   model_name: RN50
   image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
+  val_image_features_path: ${saved_paths.image_features.EuroSAT_tip_test-RN50}
 
 tokenizer:
   path: transformers.CLIPTokenizer
@@ -30,6 +32,11 @@ scheduler:
 
 data_loader:
   train:
+    batch_size: 32
+    shuffle: true
+    pin_memory: true
+    num_workers: 0
+  val:
     batch_size: 32
     shuffle: true
     pin_memory: true

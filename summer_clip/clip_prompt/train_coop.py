@@ -6,6 +6,7 @@ import clip
 import torch
 import torch.utils
 import hydra
+import numpy as np
 from munch import Munch
 from tqdm import tqdm
 from torch import nn
@@ -18,13 +19,44 @@ from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.utils.train_utils import get_grouped_params
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
-from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset
+from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset, NoImageIndexedDataset, accuracy
 from summer_clip.clip_prompt.prompt_learner import ClipTextEncoder
 
 
 def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
     for param in model.parameters():
         param.requires_grad_(requires_grad)
+
+
+@torch.no_grad()
+def compute_accuracy_loader(image_features: torch.Tensor, text_features: torch.Tensor,
+                            loader: DataLoader, device: tp.Any) -> tuple[float, float]:
+    """
+    - image_features: (images_num, emb_dim)
+    - text_features: (classes_num, emb_dim)
+    """
+    text_features = text_features.to(device)
+    image_features = image_features / image_features.norm(dim=1, keepdim=True)
+    text_features = text_features / text_features.norm(dim=1, keepdim=True)
+
+    top1, top5, n = 0., 0., 0.
+    for target, index in tqdm(loader):
+        batch_image_features = image_features[index].to(device)
+        logits = 100. * batch_image_features @ text_features.t()
+
+        target = target.to(logits.device)
+        acc1, acc5 = accuracy(logits, target, topk=(1, 5))
+        top1 += acc1
+        top5 += acc5
+        n += target.size(0)
+
+    if n <= 0:
+        return np.nan, np.nan
+
+    top1 = (top1 / n) * 100
+    top5 = (top5 / n) * 100
+
+    return top1, top5
 
 
 def save_epoch_model(model: tp.Any | None, optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
@@ -63,6 +95,9 @@ class CoOpTrainer(BaseTrainer):
         self.source_dataset = hydra.utils.instantiate(self.cfg.dataset)
         self.dataset = NoImageBalancedIndexedDataset(self.source_dataset, self.cfg.dataset_info.k_shots)
 
+        self.source_val_dataset = hydra.utils.instantiate(self.cfg.val_dataset)
+        self.val_dataset = NoImageIndexedDataset(self.source_val_dataset)
+
         tokenizer_class = load_obj(self.cfg.tokenizer.path)
         self.tokenizer = tokenizer_class.from_pretrained(self.cfg.tokenizer.name)
         if self.cfg.tokenizer.set_pad_as_eos:
@@ -78,6 +113,7 @@ class CoOpTrainer(BaseTrainer):
         ld_cfg = self.cfg.data_loader
         self.loaders = {
             'train': DataLoader(self.dataset, **ld_cfg.train),  # type: ignore
+            'val': DataLoader(self.val_dataset, **ld_cfg.val),  # type: ignore
         }
 
     def setup_loss(self):
@@ -91,14 +127,19 @@ class CoOpTrainer(BaseTrainer):
         clip_embs = clip_model.token_embedding.to(self.device)
         return text_encoder, clip_embs
 
+    def _load_image_features(self, image_features_path):
+        image_features = torch.load(image_features_path, map_location='cpu')
+        image_features = image_features.float().t().contiguous()
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        return image_features
+
     def setup_model(self):
         self.clip_text, clip_embs = self._load_clip_text()
         self.clip_text.eval()
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
         self.model = CoOp(clip_embs, self.cfg.prompt.len).to(self.device)
-        self.image_features = torch.load(self.cfg.clip.image_features_path, map_location='cpu')
-        self.image_features = self.image_features.float().t().contiguous()
-        self.image_features = self.image_features / self.image_features.norm(dim=1, keepdim=True)
+        self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
+        self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
 
     def compute_text_features(self):
         classes_batch_size = self.cfg.training.classes_batch_size
@@ -173,7 +214,20 @@ class CoOpTrainer(BaseTrainer):
 
         return epoch_info
 
+    def evaluate_val_model(self):
+        self.model.eval()
+        text_features = self.compute_text_features()
+        acc1, acc5 = compute_accuracy_loader(
+            self.val_image_features, text_features, self.loaders['val'], self.device
+        )
+        self.logger.exp_logger.log({
+            "eval/acc1": acc1,
+            "eval/acc5": acc5,
+        })
+
     def save_epoch_model(self, epoch_num):
+        print('Evaluating and saving...')
+        self.evaluate_val_model()
         save_epoch_model(
             self.model, optimizer=None, scheduler=None, epoch_num=epoch_num,
             checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
