@@ -125,7 +125,8 @@ class CoOpTrainer(BaseTrainer):
         text_encoder = ClipTextEncoder(clip_model)
         text_encoder = text_encoder.to(self.device)
         clip_embs = clip_model.token_embedding.to(self.device)
-        return text_encoder, clip_embs
+        logit_scale = clip_model.logit_scale.to(self.device).detach()
+        return text_encoder, clip_embs, logit_scale
 
     def _load_image_features(self, image_features_path):
         image_features = torch.load(image_features_path, map_location='cpu')
@@ -133,9 +134,14 @@ class CoOpTrainer(BaseTrainer):
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         return image_features
 
-    def setup_model(self):
-        self.clip_text, clip_embs = self._load_clip_text()
+    def prepare_models(self):
         self.clip_text.eval()
+        set_requires_grad(self.clip_text, False)
+        self.logit_scale.requires_grad_(False)
+
+    def setup_model(self):
+        self.clip_text, clip_embs, self.logit_scale = self._load_clip_text()
+        self.prepare_models()
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
         self.model = CoOp(clip_embs, self.cfg.prompt.len).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
@@ -159,10 +165,15 @@ class CoOpTrainer(BaseTrainer):
         all_features = torch.cat(all_features, dim=0)
         return all_features
 
+    def compute_logits(self, image_features, text_features):
+        logit_scale = self.logit_scale.exp()
+        logits = logit_scale * image_features @ text_features.t()
+        return logits
+
     def compute_clip_metrics(self, labels, indexes):
         text_features = self.compute_text_features()
         image_features = self.image_features[indexes].to(self.device)
-        logits = image_features @ text_features.t()
+        logits = self.compute_logits(image_features, text_features)
         labels = labels.to(self.device)
         loss = self.clip_loss(logits, labels)
         acc1, acc5 = compute_accuracy(logits, labels)
