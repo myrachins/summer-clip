@@ -169,8 +169,9 @@ class CoOpTrainer(BaseTrainer):
         return Munch(loss=loss, acc1=acc1, acc5=acc5)
 
     def setup_optimizer(self):
+        optim_class = load_obj(self.cfg.optim.optim_class)
         params = get_grouped_params(self.model.named_parameters(), weight_decay=self.cfg.optim.weight_decay)
-        self.optimizer = optim.AdamW(params, **self.cfg.optim.kwargs)
+        self.optimizer = optim_class(params, **self.cfg.optim.kwargs)
 
     def setup_scheduler(self):
         sch_cfg = self.cfg.scheduler

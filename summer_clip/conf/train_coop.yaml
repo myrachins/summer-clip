@@ -23,8 +23,12 @@ prompt:
 
 optim:
   weight_decay: 0.0005
+  optim_class: torch.optim.SGD
   kwargs:
     lr: 0.002
+    momentum: 0.9
+    dampening: 0
+    nesterov: false
 
 scheduler:
   name: cosine
