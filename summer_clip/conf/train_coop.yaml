@@ -13,7 +13,6 @@ clip:
 tokenizer:
   path: transformers.CLIPTokenizer
   name: openai/clip-vit-base-patch32  # should not differ from large
-  clip_seq_len: 77
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
 
@@ -38,6 +37,10 @@ data_loader:
 
 dataset_info:
   k_shots: 16
+
+collator:
+  _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
+  clip_seq_len: 77
 
 training:
   epochs_num: 100

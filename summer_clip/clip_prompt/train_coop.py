@@ -12,10 +12,10 @@ from torch import nn
 from torch import optim
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
-from transformers import CLIPTokenizer, DataCollatorForLanguageModeling, get_scheduler
+from transformers import get_scheduler
 
 from summer_clip.utils.hydra_utils import load_obj
-from summer_clip.utils.train_utils import PartlyTrainedModule, get_grouped_params, move_batch
+from summer_clip.utils.train_utils import get_grouped_params
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset
@@ -37,53 +37,25 @@ def save_epoch_model(model: tp.Any | None, optimizer: optim.Optimizer | None, sc
             torch.save(data, f)
 
     if model is not None:
-        save_data(model.training_state_dict(), 'model')
+        save_data(model.state_dict(), 'model')
     if optimizer is not None:
         save_data(optimizer.state_dict(), 'optimizer')
     if scheduler is not None:
         save_data(scheduler.state_dict(), 'scheduler')
 
 
-class CoOp(PartlyTrainedModule):
-    def __init__(self, text_encoder: ClipTextEncoder, clip_embs: nn.Embedding, prompt_len: int) -> None:
+class CoOp(nn.Module):
+    def __init__(self, clip_embs: nn.Embedding, prompt_len: int) -> None:
         super().__init__()
-        self.text_encoder = text_encoder
-        self.clip_embs = clip_embs
         self.prompt_len = prompt_len
-
-        set_requires_grad(self.text_encoder, requires_grad=False)
-        set_requires_grad(self.clip_embs, requires_grad=False)
-
         self.prompt_embs = nn.Parameter(torch.randn(prompt_len, clip_embs.weight.shape[1]), requires_grad=True)
         nn.init.normal_(self.prompt_embs, std=0.02)
 
-    def is_train_param(self, param_name: str) -> bool:
-        train_params = ('prompt_embs',)
-        return any(param_name.startswith(train_param) for train_param in train_params)
+    def get_prompt_embs(self) -> torch.Tensor:
+        return self.prompt_embs
 
-    def forward(self, input_ids, input_lens, **kwargs):
-        input_embs = self.clip_embs(input_ids)
-        prompt_embs = self.prompt_embs.unsqueeze(0).expand(input_embs.shape[0], -1, -1)
-        input_embs = torch.cat([input_embs[:, :1], prompt_embs, input_embs[:, 1:]], dim=1)
-        input_lens = [input_len + self.prompt_len for input_len in input_lens]
-        out_embs = self.text_encoder(input_embs, input_lens)
-        return out_embs
-
-
-class ClipCollator:
-    def __init__(self, tokenizer: CLIPTokenizer, pad_seq_len: int) -> None:
-        self.bos_id = tokenizer.bos_token_id
-        self.eos_id = tokenizer.eos_token_id
-        self.collator = DataCollatorForLanguageModeling(tokenizer, mlm=False, pad_to_multiple_of=pad_seq_len)
-
-    def __call__(self, input_ids: list[list[int]]) -> dict:
-        input_ids = [
-            [self.bos_id] + i_ids + [self.eos_id]
-            for i_ids in input_ids
-        ]  # type: ignore
-        batch = self.collator(input_ids)
-        batch['input_lens'] = [len(i_ids) for i_ids in input_ids]
-        return batch
+    def get_prompt_ids(self) -> list[int]:
+        return [0] * self.prompt_len
 
 
 class CoOpTrainer(BaseTrainer):
@@ -96,9 +68,6 @@ class CoOpTrainer(BaseTrainer):
         if self.cfg.tokenizer.set_pad_as_eos:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # After adding prompt tokens the length should be 'clip_seq_len'
-        pad_seq_len = self.cfg.tokenizer.clip_seq_len - self.cfg.prompt.len
-        self.clip_collator = ClipCollator(self.tokenizer, pad_seq_len)
         self.text_classes = list(self.cfg.prompting.classes or self.source_dataset.classes)
         self.token_classes = self.tokenizer(
             self.text_classes, add_special_tokens=False,
@@ -123,21 +92,27 @@ class CoOpTrainer(BaseTrainer):
         return text_encoder, clip_embs
 
     def setup_model(self):
-        clip_text, clip_embs = self._load_clip_text()
-        self.model = CoOp(clip_text.eval(), clip_embs, self.cfg.prompt.len)
+        self.clip_text, clip_embs = self._load_clip_text()
+        self.clip_text.eval()
+        self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
+        self.model = CoOp(clip_embs, self.cfg.prompt.len).to(self.device)
         self.image_features = torch.load(self.cfg.clip.image_features_path, map_location='cpu')
         self.image_features = self.image_features.float().t().contiguous()
         self.image_features = self.image_features / self.image_features.norm(dim=1, keepdim=True)
 
     def compute_text_features(self):
         classes_batch_size = self.cfg.training.classes_batch_size
+        prompt_embs = self.model.get_prompt_embs()
+        prompt_ids = self.model.get_prompt_ids()
         all_features = []
         for begin_ind in range(0, len(self.token_classes), classes_batch_size):
             end_ind = begin_ind + classes_batch_size
             batch_classes = self.token_classes[begin_ind:end_ind]
-            batch_classes = self.clip_collator(batch_classes)
-            batch_classes = move_batch(batch_classes, self.device)
-            text_features = self.model(**batch_classes)
+            clip_batch = self.collator.get_clip_input(
+                prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+                input_ids=batch_classes
+            )
+            text_features = self.clip_text(**clip_batch)
             text_features = text_features / text_features.norm(dim=1, keepdim=True)
             all_features.append(text_features)
         all_features = torch.cat(all_features, dim=0)
@@ -153,7 +128,7 @@ class CoOpTrainer(BaseTrainer):
         return Munch(loss=loss, acc1=acc1, acc5=acc5)
 
     def setup_optimizer(self):
-        params = get_grouped_params(self.model.named_training_parameters(), weight_decay=self.cfg.optim.weight_decay)
+        params = get_grouped_params(self.model.named_parameters(), weight_decay=self.cfg.optim.weight_decay)
         self.optimizer = optim.AdamW(params, **self.cfg.optim.kwargs)
 
     def setup_scheduler(self):
