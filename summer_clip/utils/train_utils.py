@@ -1,6 +1,7 @@
 import typing as tp
 from abc import ABC, abstractmethod
 
+import torch
 from torch import nn
 
 
@@ -31,3 +32,12 @@ class PartlyTrainedModule(ABC, nn.Module):
 
     def training_state_dict(self):
         return {name: param for name, param in self.state_dict().items() if self.is_train_param(name)}
+
+
+def move_batch(batch: dict[str, tp.Any], device: tp.Any) -> dict[str, tp.Any]:
+    def move_value(value: tp.Any):
+        if isinstance(value, torch.Tensor):
+            value = value.to(device)
+        return value
+    batch = {name: move_value(val) for name, val in batch.items()}
+    return batch

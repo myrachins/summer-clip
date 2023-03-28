@@ -1,5 +1,5 @@
 meta:
-  device: cuda
+  device: null  # setting gpu if available
   random_state: 42
 
 path:

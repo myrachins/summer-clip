@@ -12,10 +12,10 @@ from torch import nn
 from torch import optim
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
-from transformers import CLIPTokenizer, get_scheduler
+from transformers import CLIPTokenizer, DataCollatorForLanguageModeling, get_scheduler
 
 from summer_clip.utils.hydra_utils import load_obj
-from summer_clip.utils.train_utils import PartlyTrainedModule, get_grouped_params
+from summer_clip.utils.train_utils import PartlyTrainedModule, get_grouped_params, move_batch
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
 from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset
@@ -49,6 +49,7 @@ class CoOp(PartlyTrainedModule):
         super().__init__()
         self.text_encoder = text_encoder
         self.clip_embs = clip_embs
+        self.prompt_len = prompt_len
 
         set_requires_grad(self.text_encoder, requires_grad=False)
         set_requires_grad(self.clip_embs, requires_grad=False)
@@ -60,10 +61,29 @@ class CoOp(PartlyTrainedModule):
         train_params = ('prompt_embs',)
         return any(param_name.startswith(train_param) for train_param in train_params)
 
-    def forward(self, input_ids):
+    def forward(self, input_ids, input_lens, **kwargs):
         input_embs = self.clip_embs(input_ids)
-        input_embs = torch.cat([input_embs[:, :1], self.prompt_embs, input_embs[:, 1:]], dim=1)
-        return input_embs
+        prompt_embs = self.prompt_embs.unsqueeze(0).expand(input_embs.shape[0], -1, -1)
+        input_embs = torch.cat([input_embs[:, :1], prompt_embs, input_embs[:, 1:]], dim=1)
+        input_lens = [input_len + self.prompt_len for input_len in input_lens]
+        out_embs = self.text_encoder(input_embs, input_lens)
+        return out_embs
+
+
+class ClipCollator:
+    def __init__(self, tokenizer: CLIPTokenizer, pad_seq_len: int) -> None:
+        self.bos_id = tokenizer.bos_token_id
+        self.eos_id = tokenizer.eos_token_id
+        self.collator = DataCollatorForLanguageModeling(tokenizer, mlm=False, pad_to_multiple_of=pad_seq_len)
+
+    def __call__(self, input_ids: list[list[int]]) -> dict:
+        input_ids = [
+            [self.bos_id] + i_ids + [self.eos_id]
+            for i_ids in input_ids
+        ]  # type: ignore
+        batch = self.collator(input_ids)
+        batch['input_lens'] = [len(i_ids) for i_ids in input_ids]
+        return batch
 
 
 class CoOpTrainer(BaseTrainer):
@@ -76,6 +96,9 @@ class CoOpTrainer(BaseTrainer):
         if self.cfg.tokenizer.set_pad_as_eos:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+        # After adding prompt tokens the length should be 'clip_seq_len'
+        pad_seq_len = self.cfg.tokenizer.clip_seq_len - self.cfg.prompt.len
+        self.clip_collator = ClipCollator(self.tokenizer, pad_seq_len)
         self.text_classes = list(self.cfg.prompting.classes or self.source_dataset.classes)
         self.token_classes = self.tokenizer(
             self.text_classes, add_special_tokens=False,
@@ -112,7 +135,9 @@ class CoOpTrainer(BaseTrainer):
         for begin_ind in range(0, len(self.token_classes), classes_batch_size):
             end_ind = begin_ind + classes_batch_size
             batch_classes = self.token_classes[begin_ind:end_ind]
-            text_features = self.model(batch_classes)
+            batch_classes = self.clip_collator(batch_classes)
+            batch_classes = move_batch(batch_classes, self.device)
+            text_features = self.model(**batch_classes)
             text_features = text_features / text_features.norm(dim=1, keepdim=True)
             all_features.append(text_features)
         all_features = torch.cat(all_features, dim=0)

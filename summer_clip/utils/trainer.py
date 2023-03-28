@@ -5,6 +5,7 @@ import torch
 import torch.cuda
 import torch.backends.cudnn
 import numpy as np
+import omegaconf
 from omegaconf import DictConfig, OmegaConf
 
 from summer_clip.utils import log_utils
@@ -24,6 +25,9 @@ class BaseTrainer:
         self.model.eval()  # type: ignore
 
     def setup_device(self):
+        with omegaconf.open_dict(self.cfg):
+            if self.cfg.meta.device is None:
+                self.cfg.meta.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.device = torch.device(self.cfg.meta.device)
 
     def setup_logger(self):

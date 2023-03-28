@@ -13,8 +13,12 @@ clip:
 tokenizer:
   path: transformers.CLIPTokenizer
   name: openai/clip-vit-base-patch32  # should not differ from large
+  clip_seq_len: 77
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
+
+prompt:
+  len: 16
 
 optim:
   weight_decay: 0.0005
@@ -30,7 +34,7 @@ data_loader:
     batch_size: 32
     shuffle: true
     pin_memory: true
-    num_workers: 4
+    num_workers: 0
 
 dataset_info:
   k_shots: 16
@@ -39,6 +43,7 @@ training:
   epochs_num: 100
   info_steps: 1
   gradient_accumulation_steps: 1
+  classes_batch_size: 16
   new_top_prompts_each_epoch: false
   checkpoints_dir: checkpoints/
 
