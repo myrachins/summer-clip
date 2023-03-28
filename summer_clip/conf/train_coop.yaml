@@ -28,7 +28,7 @@ optim:
 
 scheduler:
   name: cosine
-  warmup_part: 0.01
+  warmup_part: 0.005
 
 data_loader:
   train:
@@ -50,7 +50,7 @@ collator:
   clip_seq_len: 77
 
 training:
-  epochs_num: 100
+  epochs_num: 200
   info_steps: 1
   gradient_accumulation_steps: 1
   classes_batch_size: 16
