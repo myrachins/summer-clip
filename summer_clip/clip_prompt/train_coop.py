@@ -1,4 +1,3 @@
-import heapq
 import typing as tp
 from pathlib import Path
 
@@ -11,22 +10,17 @@ from munch import Munch
 from tqdm import tqdm
 from torch import nn
 from torch import optim
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from torch.utils.data.dataloader import DataLoader
 from transformers import get_scheduler
 
 from summer_clip.utils.hydra_utils import load_obj
-from summer_clip.utils.train_utils import get_grouped_params
+from summer_clip.clip_searcher.utils import compute_accuracy
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
 from summer_clip.clip_prompt.gen_gpt import load_pretrained_model
-from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
+from summer_clip.utils.train_utils import get_grouped_params, set_requires_grad
 from summer_clip.clip_prompt.prompt_learner import ClipTextEncoder, GPTEmbed
 from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset, NoImageIndexedDataset, accuracy
-
-
-def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
-    for param in model.parameters():
-        param.requires_grad_(requires_grad)
 
 
 @torch.no_grad()
@@ -75,20 +69,6 @@ def save_epoch_model(model: tp.Any | None, optimizer: optim.Optimizer | None, sc
         save_data(optimizer.state_dict(), 'optimizer')
     if scheduler is not None:
         save_data(scheduler.state_dict(), 'scheduler')
-
-
-class CoOp(nn.Module):
-    def __init__(self, clip_embs: nn.Embedding, prompt_len: int) -> None:
-        super().__init__()
-        self.prompt_len = prompt_len
-        self.prompt_embs = nn.Parameter(torch.randn(prompt_len, clip_embs.weight.shape[1]), requires_grad=True)
-        nn.init.normal_(self.prompt_embs, std=0.02)
-
-    def get_prompt_embs(self) -> torch.Tensor:
-        return self.prompt_embs
-
-    def get_prompt_ids(self) -> list[int]:
-        return [0] * self.prompt_len
 
 
 class CoOpTrainer(BaseTrainer):
@@ -160,7 +140,7 @@ class CoOpTrainer(BaseTrainer):
             token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
         )
         self.lm_loss_transformer = hydra.utils.instantiate(self.cfg.lm_loss)
-        self.model = CoOp(clip_embs, self.cfg.prompt.len).to(self.device)
+        self.model = hydra.utils.instantiate(self.cfg.prompt_model, clip_embs=clip_embs).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
         self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
 
@@ -205,10 +185,11 @@ class CoOpTrainer(BaseTrainer):
         return loss
 
     def compute_full_metrics(self, labels, indexes):
-        prompt_embs = self.model.get_prompt_embs()
+        clip_prompt_embs = self.model.get_clip_prompt_embs()
+        gpt_prompt_embs = self.model.get_gpt_prompt_embs()
         prompt_ids = self.model.get_prompt_ids()
-        clip_metrics = self.compute_clip_metrics(labels, indexes, prompt_embs, prompt_ids)
-        lm_loss = self.compute_lm_loss(labels, prompt_embs, prompt_ids)
+        clip_metrics = self.compute_clip_metrics(labels, indexes, clip_prompt_embs, prompt_ids)
+        lm_loss = self.compute_lm_loss(labels, gpt_prompt_embs, prompt_ids)
         loss = self.cfg.loss.clip * clip_metrics.clip_loss + self.cfg.loss.fluency * lm_loss
         return Munch(loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss, acc1=clip_metrics.acc1, acc5=clip_metrics.acc5)
 
@@ -264,7 +245,7 @@ class CoOpTrainer(BaseTrainer):
     def evaluate_val_model(self):
         self.model.eval()
         text_features = self.compute_text_features(
-            self.model.get_prompt_embs(), self.model.get_prompt_ids()
+            self.model.get_clip_prompt_embs(), self.model.get_prompt_ids()
         )
         acc1, acc5 = compute_accuracy_loader(
             self.val_image_features, text_features, self.loaders['val'], self.device

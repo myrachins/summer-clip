@@ -41,3 +41,8 @@ def move_batch(batch: dict[str, tp.Any], device: tp.Any) -> dict[str, tp.Any]:
         return value
     batch = {name: move_value(val) for name, val in batch.items()}
     return batch
+
+
+def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
+    for param in model.parameters():
+        param.requires_grad_(requires_grad)

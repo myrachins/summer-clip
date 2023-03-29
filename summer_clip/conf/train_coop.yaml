@@ -16,14 +16,15 @@ clip_gpt:
   meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model_cfg.yaml
   state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
 
+prompt_model:
+  _target_: summer_clip.clip_prompt.prompt_models.CoOp
+  prompt_len: 16
+
 tokenizer:
   path: transformers.CLIPTokenizer
   name: openai/clip-vit-base-patch32  # should not differ from large
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
-
-prompt:
-  len: 16
 
 optim:
   weight_decay: 0.0005
@@ -67,7 +68,7 @@ loss:
 
 lm_loss:
   _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
-  prompt_len: ${prompt.len}
+  prompt_len: ${prompt_model.prompt_len}
 
 training:
   epochs_num: 200
