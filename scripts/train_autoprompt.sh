@@ -4,7 +4,7 @@
 nvidia-smi
 date
 
-PY_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/clip_prompt/train_prompt.py"
+PY_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/clip_prompt/train_autoprompt.py"
 SUMMER_CLIP_PATH="/home/myurachinskiy/CLIP/summer-clip"
 ACCELERATE_CFG_PATH="/home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/accelerate/cfg_v1.yaml"
 

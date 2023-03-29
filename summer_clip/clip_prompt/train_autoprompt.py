@@ -254,7 +254,7 @@ class PromptTrainer(BaseTrainer):
             self.top_prompts.clear()
 
 
-@hydra.main(config_path='../conf', config_name='train_prompt', version_base='1.1')
+@hydra.main(config_path='../conf', config_name='train_autoprompt', version_base='1.1')
 def run(cfg: DictConfig) -> None:
     run_trainer(PromptTrainer, cfg)
 
