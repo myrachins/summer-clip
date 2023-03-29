@@ -12,6 +12,10 @@ clip:
   image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
   val_image_features_path: ${saved_paths.image_features.EuroSAT_tip_test-RN50}
 
+clip_gpt:
+  meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model_cfg.yaml
+  state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
+
 tokenizer:
   path: transformers.CLIPTokenizer
   name: openai/clip-vit-base-patch32  # should not differ from large
@@ -52,6 +56,18 @@ dataset_info:
 collator:
   _target_: summer_clip.clip_prompt.prompt_learner.LeftPromptCollator
   clip_seq_len: 77
+
+text_batcher:
+  path: summer_clip.clip_prompt.prompt_learner.ImageTextBatcher
+  kwargs: {}
+
+loss:
+  clip: 1.0
+  fluency: 0.
+
+lm_loss:
+  _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
+  prompt_len: ${prompt.len}
 
 training:
   epochs_num: 200

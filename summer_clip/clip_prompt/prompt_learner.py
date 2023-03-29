@@ -3,6 +3,7 @@ import typing as tp
 
 import torch
 from torch import nn
+from torch import Tensor
 from transformers import DataCollatorForLanguageModeling
 
 from summer_clip.clip_prompt.gpt import ClipGPT
@@ -156,3 +157,30 @@ class EmptyTextBatcher:
 
     def get_batch_classes(self, batch_labels):
         return [[]]
+
+
+class FullLMLoss:
+    def transform(self, lm_in, lm_out) -> Tensor:
+        return lm_out.loss
+
+
+class SuffixLMLoss:
+    def __init__(self, prompt_len: int, has_bos: bool = True):
+        self.prefix_len = prompt_len
+        if has_bos:
+            self.prefix_len += 1
+        self.loss = nn.CrossEntropyLoss()
+
+    def transform(self, lm_in, lm_out) -> Tensor:
+        # Since labels == input_ids, we make the shift manually
+        # https://github.com/huggingface/transformers/blob/68287689f2f0d8b7063c400230b3766987abf18d/src/transformers/models/gpt2/modeling_gpt2.py#L1100
+        logits = lm_out['logits'][..., self.prefix_len:-1, :].contiguous()
+        labels = lm_in['labels'][..., self.prefix_len + 1:].contiguous()
+        loss = self.loss(logits.view(-1, logits.size(-1)), labels.view(-1))
+        return loss
+
+
+class NoLMLoss:
+    def transform(self, lm_in, lm_out) -> Tensor:
+        loss = torch.zeros_like(lm_out.loss)
+        return loss

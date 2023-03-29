@@ -18,9 +18,10 @@ from transformers import get_scheduler
 from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.utils.train_utils import get_grouped_params
 from summer_clip.utils.trainer import BaseTrainer, run_trainer
+from summer_clip.clip_prompt.gen_gpt import load_pretrained_model
 from summer_clip.clip_searcher.utils import load_labels, compute_accuracy
+from summer_clip.clip_prompt.prompt_learner import ClipTextEncoder, GPTEmbed
 from summer_clip.clip_adapter.train_adapter import NoImageBalancedIndexedDataset, NoImageIndexedDataset, accuracy
-from summer_clip.clip_prompt.prompt_learner import ClipTextEncoder
 
 
 def set_requires_grad(model: tp.Any, requires_grad: bool) -> None:
@@ -128,6 +129,15 @@ class CoOpTrainer(BaseTrainer):
         logit_scale = clip_model.logit_scale.to(self.device).detach()
         return text_encoder, clip_embs, logit_scale
 
+    def _load_gpt_model(self):
+        clip_gpt = load_pretrained_model(
+            self.cfg.clip_gpt.meta_cfg_path, self.cfg.clip_gpt.state_dict_path,
+            map_location=self.device
+        )
+        gpt = GPTEmbed(clip_gpt.gpt)
+        embs = clip_gpt.gpt.transformer.wte.emb
+        return gpt, embs
+
     def _load_image_features(self, image_features_path):
         image_features = torch.load(image_features_path, map_location='cpu')
         image_features = image_features.float().t().contiguous()
@@ -135,22 +145,27 @@ class CoOpTrainer(BaseTrainer):
         return image_features
 
     def prepare_models(self):
+        self.gpt.eval()
         self.clip_text.eval()
+        set_requires_grad(self.gpt, False)
         set_requires_grad(self.clip_text, False)
         self.logit_scale.requires_grad_(False)
 
     def setup_model(self):
+        self.gpt, _ = self._load_gpt_model()
         self.clip_text, clip_embs, self.logit_scale = self._load_clip_text()
         self.prepare_models()
         self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
+        self.text_batcher = load_obj(self.cfg.text_batcher.path)(
+            token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
+        )
+        self.lm_loss_transformer = hydra.utils.instantiate(self.cfg.lm_loss)
         self.model = CoOp(clip_embs, self.cfg.prompt.len).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
         self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
 
-    def compute_text_features(self):
+    def compute_text_features(self, prompt_embs, prompt_ids):
         classes_batch_size = self.cfg.training.classes_batch_size
-        prompt_embs = self.model.get_prompt_embs()
-        prompt_ids = self.model.get_prompt_ids()
         all_features = []
         for begin_ind in range(0, len(self.token_classes), classes_batch_size):
             end_ind = begin_ind + classes_batch_size
@@ -170,14 +185,32 @@ class CoOpTrainer(BaseTrainer):
         logits = logit_scale * image_features @ text_features.t()
         return logits
 
-    def compute_clip_metrics(self, labels, indexes):
-        text_features = self.compute_text_features()
+    def compute_clip_metrics(self, labels, indexes, prompt_embs, prompt_ids):
+        text_features = self.compute_text_features(prompt_embs, prompt_ids)
         image_features = self.image_features[indexes].to(self.device)
         logits = self.compute_logits(image_features, text_features)
         labels = labels.to(self.device)
         loss = self.clip_loss(logits, labels)
         acc1, acc5 = compute_accuracy(logits, labels)
-        return Munch(loss=loss, acc1=acc1, acc5=acc5)
+        return Munch(clip_loss=loss, acc1=acc1, acc5=acc5)
+
+    def compute_lm_loss(self, labels, prompt_embs, prompt_ids):
+        batch_classes = self.text_batcher.get_batch_classes(labels)
+        lm_batch = self.collator.get_gpt_input(
+            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
+            input_ids=batch_classes
+        )
+        lm_out = self.gpt(**lm_batch)
+        loss = self.lm_loss_transformer.transform(lm_batch, lm_out)
+        return loss
+
+    def compute_full_metrics(self, labels, indexes):
+        prompt_embs = self.model.get_prompt_embs()
+        prompt_ids = self.model.get_prompt_ids()
+        clip_metrics = self.compute_clip_metrics(labels, indexes, prompt_embs, prompt_ids)
+        lm_loss = self.compute_lm_loss(labels, prompt_embs, prompt_ids)
+        loss = self.cfg.loss.clip * clip_metrics.clip_loss + self.cfg.loss.fluency * lm_loss
+        return Munch(loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss, acc1=clip_metrics.acc1, acc5=clip_metrics.acc5)
 
     def setup_optimizer(self):
         optim_class = load_obj(self.cfg.optim.optim_class)
@@ -205,7 +238,7 @@ class CoOpTrainer(BaseTrainer):
         completed_steps = 0
 
         for step, (labels, indexes) in enumerate(tqdm(self.loaders['train']), start=1):
-            metrics = self.compute_clip_metrics(labels, indexes)
+            metrics = self.compute_full_metrics(labels, indexes)
             loss = metrics.loss
             loss = loss / train_cfg.gradient_accumulation_steps
             loss.backward()
@@ -220,6 +253,8 @@ class CoOpTrainer(BaseTrainer):
                 self.logger.exp_logger.log({
                     "steps": completed_steps,
                     "loss/train": metrics.loss.item(),
+                    "loss/clip": metrics.clip_loss.item(),
+                    "loss/lm": metrics.lm_loss.item(),
                     "acc/top1": metrics.acc1,
                     "acc/top5": metrics.acc5,
                 })
@@ -228,7 +263,9 @@ class CoOpTrainer(BaseTrainer):
 
     def evaluate_val_model(self):
         self.model.eval()
-        text_features = self.compute_text_features()
+        text_features = self.compute_text_features(
+            self.model.get_prompt_embs(), self.model.get_prompt_ids()
+        )
         acc1, acc5 = compute_accuracy_loader(
             self.val_image_features, text_features, self.loaders['val'], self.device
         )
