@@ -57,8 +57,7 @@ class VQVAE1(nn.Module):
         prompt_ids = find_nearest(
             self.prompt_embs, self.clip_embs, self.dist_p
         )
-        arange = torch.arange(prompt_ids.shape[0], device=prompt_ids.device)
-        vocab_embs = self.prompt_embs[arange, prompt_ids]
+        vocab_embs = self.clip_embs[prompt_ids, :]
         out_embs = straight_through(vocab_embs, self.prompt_embs)
         out = Munch(
             clip_embs=out_embs, gpt_embs=out_embs, ids=prompt_ids.cpu().tolist()

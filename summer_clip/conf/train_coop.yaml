@@ -17,7 +17,7 @@ clip_gpt:
   state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
 
 prompt_model:
-  _target_: summer_clip.clip_prompt.prompt_models.CoOp
+  _target_: summer_clip.clip_prompt.prompt_models.VQVAE2
   prompt_len: 16
   dist_p: 2
 
@@ -65,11 +65,14 @@ text_batcher:
 
 loss:
   clip: 1.0
-  fluency: 0.
+  fluency: 0.1
+
+# lm_loss:
+#   _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
+#   prompt_len: ${prompt_model.prompt_len}
 
 lm_loss:
-  _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
-  prompt_len: ${prompt_model.prompt_len}
+  _target_: summer_clip.clip_prompt.prompt_learner.FullLMLoss
 
 training:
   epochs_num: 200
