@@ -19,6 +19,7 @@ clip_gpt:
 prompt_model:
   _target_: summer_clip.clip_prompt.prompt_models.CoOp
   prompt_len: 16
+  dist_p: 2
 
 tokenizer:
   path: transformers.CLIPTokenizer

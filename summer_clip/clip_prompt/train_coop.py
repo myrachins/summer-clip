@@ -10,7 +10,7 @@ from munch import Munch
 from tqdm import tqdm
 from torch import nn
 from torch import optim
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data.dataloader import DataLoader
 from transformers import get_scheduler
 
@@ -54,7 +54,12 @@ def compute_accuracy_loader(image_features: torch.Tensor, text_features: torch.T
     return top1, top5
 
 
-def save_epoch_model(model: tp.Any | None, optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
+def ids_to_tokens(prompt_ids: list[int], tokenizer: tp.Any) -> list[str]:
+    return [tokenizer.decoder[prompt_id] for prompt_id in prompt_ids]
+
+
+def save_epoch_model(model: tp.Any, prompt_ids: list[int], prompt_tokens: list[str],
+                     optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
                      epoch_num: int, checkpoints_dir: Path) -> None:
     epoch_dir = checkpoints_dir / f'epoch_{epoch_num}'
     epoch_dir.mkdir(parents=True, exist_ok=True)
@@ -63,12 +68,14 @@ def save_epoch_model(model: tp.Any | None, optimizer: optim.Optimizer | None, sc
         with open(epoch_dir / f'{data_name}.ckpt', 'wb') as f:
             torch.save(data, f)
 
-    if model is not None:
-        save_data(model.state_dict(), 'model')
+    save_data(model.state_dict(), 'model')
     if optimizer is not None:
         save_data(optimizer.state_dict(), 'optimizer')
     if scheduler is not None:
         save_data(scheduler.state_dict(), 'scheduler')
+
+    prompt_cfg = OmegaConf.create(dict(prompt_ids=prompt_ids, prompt_tokens=prompt_tokens))
+    OmegaConf.save(prompt_cfg, epoch_dir / 'prompts.yaml')
 
 
 class CoOpTrainer(BaseTrainer):
@@ -185,11 +192,9 @@ class CoOpTrainer(BaseTrainer):
         return loss
 
     def compute_full_metrics(self, labels, indexes):
-        clip_prompt_embs = self.model.get_clip_prompt_embs()
-        gpt_prompt_embs = self.model.get_gpt_prompt_embs()
-        prompt_ids = self.model.get_prompt_ids()
-        clip_metrics = self.compute_clip_metrics(labels, indexes, clip_prompt_embs, prompt_ids)
-        lm_loss = self.compute_lm_loss(labels, gpt_prompt_embs, prompt_ids)
+        model_out = self.model()
+        clip_metrics = self.compute_clip_metrics(labels, indexes, model_out.clip_embs, model_out.ids)
+        lm_loss = self.compute_lm_loss(labels, model_out.gpt_embs, model_out.ids)
         loss = self.cfg.loss.clip * clip_metrics.clip_loss + self.cfg.loss.fluency * lm_loss
         return Munch(loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss, acc1=clip_metrics.acc1, acc5=clip_metrics.acc5)
 
@@ -242,10 +247,9 @@ class CoOpTrainer(BaseTrainer):
 
         return epoch_info
 
-    def evaluate_val_model(self):
-        self.model.eval()
+    def evaluate_val_model(self, model_out):
         text_features = self.compute_text_features(
-            self.model.get_clip_prompt_embs(), self.model.get_prompt_ids()
+            model_out.clip_embs, model_out.ids
         )
         acc1, acc5 = compute_accuracy_loader(
             self.val_image_features, text_features, self.loaders['val'], self.device
@@ -257,10 +261,13 @@ class CoOpTrainer(BaseTrainer):
 
     def save_epoch_model(self, epoch_num):
         print('Evaluating and saving...')
-        self.evaluate_val_model()
+        self.model.eval()
+        model_out = self.model()
+        self.evaluate_val_model(model_out)
+        prompt_tokens = ids_to_tokens(model_out.ids, self.tokenizer)
         save_epoch_model(
-            self.model, optimizer=None, scheduler=None, epoch_num=epoch_num,
-            checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
+            self.model, model_out.ids, prompt_tokens, optimizer=None, scheduler=None,
+            epoch_num=epoch_num, checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
         )
 
 
