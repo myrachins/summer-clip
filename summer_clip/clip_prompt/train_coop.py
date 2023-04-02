@@ -3,8 +3,9 @@ from pathlib import Path
 
 import clip
 import torch
-import torch.utils
 import hydra
+import wandb
+import torch.utils
 import numpy as np
 from munch import Munch
 from tqdm import tqdm
@@ -58,8 +59,7 @@ def ids_to_tokens(prompt_ids: list[int], tokenizer: tp.Any) -> list[str]:
     return [tokenizer.decoder[prompt_id] for prompt_id in prompt_ids]
 
 
-def save_epoch_model(model: tp.Any, prompt_ids: list[int], prompt_tokens: list[str],
-                     optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
+def save_epoch_model(model: tp.Any, optimizer: optim.Optimizer | None, scheduler: optim.lr_scheduler._LRScheduler | None,
                      epoch_num: int, checkpoints_dir: Path) -> None:
     epoch_dir = checkpoints_dir / f'epoch_{epoch_num}'
     epoch_dir.mkdir(parents=True, exist_ok=True)
@@ -73,9 +73,6 @@ def save_epoch_model(model: tp.Any, prompt_ids: list[int], prompt_tokens: list[s
         save_data(optimizer.state_dict(), 'optimizer')
     if scheduler is not None:
         save_data(scheduler.state_dict(), 'scheduler')
-
-    prompt_cfg = OmegaConf.create(dict(prompt_ids=prompt_ids, prompt_tokens=prompt_tokens))
-    OmegaConf.save(prompt_cfg, epoch_dir / 'prompts.yaml')
 
 
 class CoOpTrainer(BaseTrainer):
@@ -96,6 +93,7 @@ class CoOpTrainer(BaseTrainer):
             self.text_classes, add_special_tokens=False,
             **self.cfg.tokenizer.tokenize_classes_kwargs
         )['input_ids']
+        self.save_text_classes()
 
     def setup_loaders(self):
         ld_cfg = self.cfg.data_loader
@@ -106,6 +104,17 @@ class CoOpTrainer(BaseTrainer):
 
     def setup_loss(self):
         self.clip_loss = nn.CrossEntropyLoss()
+
+    def setup_logger(self):
+        super().setup_logger()
+        self.prompt_records = []
+
+    def save_text_classes(self):
+        classes_table = wandb.Table(columns=["ind", "class", "class_tokens"])
+        for ind, (class_text, class_ids) in enumerate(zip(self.text_classes, self.token_classes)):
+            class_tokens = ids_to_tokens(class_ids, self.tokenizer)
+            classes_table.add_data(ind, class_text, class_tokens)
+        self.logger.exp_logger.log({"classes_table": classes_table})
 
     def _load_clip_text(self):
         clip_model, _ = clip.load(self.cfg.clip.model_name, 'cpu', jit=False)
@@ -254,19 +263,62 @@ class CoOpTrainer(BaseTrainer):
         acc1, acc5 = compute_accuracy_loader(
             self.val_image_features, text_features, self.loaders['val'], self.device
         )
-        self.logger.exp_logger.log({
+        return {
             "eval/acc1": acc1,
             "eval/acc5": acc5,
-        })
+        }
+
+    def evaluate_solo_prompt(self, model_out):
+        lm_batch = self.collator.get_gpt_input(
+            prompt_embs=model_out.gpt_embs, prompt_ids=model_out.ids,
+            input_ids=[[]]
+        )
+        lm_out = self.gpt(**lm_batch)
+        return lm_out.loss.item()
+
+    def evaluate_classes_prompt(self, model_out):
+        classes_batch_size = self.cfg.training.classes_batch_size
+        res_loss = 0.
+        for begin_ind in range(0, len(self.token_classes), classes_batch_size):
+            end_ind = begin_ind + classes_batch_size
+            batch_classes = self.token_classes[begin_ind:end_ind]
+            lm_batch = self.collator.get_gpt_input(
+                prompt_embs=model_out.gpt_embs, prompt_ids=model_out.ids,
+                input_ids=batch_classes
+            )
+            lm_out = self.gpt(**lm_batch)
+            res_loss += lm_out.loss.item() * len(batch_classes)
+        res_loss /= len(self.token_classes)
+        return res_loss
+
+    def evaluate_prompt(self, epoch_num, model_out):
+        prompt_loss = self.evaluate_solo_prompt(model_out)
+        prompt_classes_loss = self.evaluate_classes_prompt(model_out)
+        prompt_tokens = ids_to_tokens(model_out.ids, self.tokenizer)
+        prompt_text = self.tokenizer.decode(model_out.ids)
+        self.prompt_records.append((
+            epoch_num, prompt_loss, prompt_classes_loss,
+            prompt_text, prompt_tokens
+        ))
+        prompt_table = wandb.Table(data=self.prompt_records, columns=[
+            "epoch", "prompt_loss", "prompt_classes_loss",
+            "prompt", "prompt_tokens"
+        ])
+        return {
+            "prompt_table": prompt_table,
+            "prompt/prompt_loss": prompt_loss,
+            "prompt/prompt_classes_loss": prompt_classes_loss,
+        }
 
     def save_epoch_model(self, epoch_num):
         print('Evaluating and saving...')
         self.model.eval()
         model_out = self.model()
-        self.evaluate_val_model(model_out)
-        prompt_tokens = ids_to_tokens(model_out.ids, self.tokenizer)
+        eval_model = self.evaluate_val_model(model_out)
+        eval_prompt = self.evaluate_prompt(epoch_num, model_out)
+        self.logger.exp_logger.log(eval_model | eval_prompt)
         save_epoch_model(
-            self.model, model_out.ids, prompt_tokens, optimizer=None, scheduler=None,
+            self.model, optimizer=None, scheduler=None,
             epoch_num=epoch_num, checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
         )
 

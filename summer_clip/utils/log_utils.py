@@ -64,8 +64,8 @@ class WandbLogger:
                     code.add_file(os.path.basename(path), name=path)
         wandb.run.log_artifact(code)  # type: ignore
 
-    def log(self, info):
-        wandb.log(info)
+    def log(self, info, **kwargs):
+        wandb.log(info, **kwargs)
 
     def log_images(self, name, imgs, epoch_num):
         wandb.log({name: wandb.Image(imgs, caption=f"epoch = {epoch_num}")})
