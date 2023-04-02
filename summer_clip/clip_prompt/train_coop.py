@@ -1,3 +1,4 @@
+from copy import copy
 import typing as tp
 from pathlib import Path
 
@@ -200,12 +201,23 @@ class CoOpTrainer(BaseTrainer):
         loss = self.lm_loss_transformer.transform(lm_batch, lm_out)
         return loss
 
+    def make_model_info(self, model_out):
+        model_info = copy(model_out)
+        for pop_name in ('clip_embs', 'gpt_embs', 'ids'):
+            model_info.pop(pop_name)
+        return model_info
+
     def compute_full_metrics(self, labels, indexes):
         model_out = self.model()
         clip_metrics = self.compute_clip_metrics(labels, indexes, model_out.clip_embs, model_out.ids)
         lm_loss = self.compute_lm_loss(labels, model_out.gpt_embs, model_out.ids)
         loss = self.cfg.loss.clip * clip_metrics.clip_loss + self.cfg.loss.fluency * lm_loss
-        return Munch(loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss, acc1=clip_metrics.acc1, acc5=clip_metrics.acc5)
+        metrics = Munch(
+            loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss,
+            acc1=clip_metrics.acc1, acc5=clip_metrics.acc5
+        )
+        model_info = self.make_model_info(model_out)
+        return metrics, model_info
 
     def setup_optimizer(self):
         optim_class = load_obj(self.cfg.optim.optim_class)
@@ -233,7 +245,7 @@ class CoOpTrainer(BaseTrainer):
         completed_steps = 0
 
         for step, (labels, indexes) in enumerate(tqdm(self.loaders['train']), start=1):
-            metrics = self.compute_full_metrics(labels, indexes)
+            metrics, model_info = self.compute_full_metrics(labels, indexes)
             loss = metrics.loss
             loss = loss / train_cfg.gradient_accumulation_steps
             loss.backward()
@@ -245,14 +257,16 @@ class CoOpTrainer(BaseTrainer):
                 completed_steps += 1
 
             if step % train_cfg.info_steps == 0:
-                self.logger.exp_logger.log({
+                main_log = {
                     "steps": completed_steps,
                     "loss/train": metrics.loss.item(),
                     "loss/clip": metrics.clip_loss.item(),
                     "loss/lm": metrics.lm_loss.item(),
                     "acc/top1": metrics.acc1,
                     "acc/top5": metrics.acc5,
-                })
+                }
+                model_info = {f'model_info/{name}': val for name, val in model_info.items()}
+                self.logger.exp_logger.log(main_log | model_info)
 
         return epoch_info
 

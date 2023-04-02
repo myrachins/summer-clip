@@ -6,6 +6,8 @@ from torch import Tensor
 from munch import Munch
 from torch.nn import functional as F
 
+from summer_clip.clip_prompt.temp_schedulers import Scheduler
+
 
 def find_nearest(prompt_embs: Tensor, clip_embs: Tensor, p: float) -> Tensor:
     dists = torch.cdist(
@@ -74,13 +76,22 @@ class VQVAE2(VQVAE1):
 
 
 class Gumbelv0a1(nn.Module):
-    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, **kwargs: tp.Any) -> None:
+    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
+        super().__init__()
         self.clip_embs = clip_embs.weight.data  # we are not training this one
+        self.temp_scheduler = temp_scheduler
         self.prompt_logits = nn.Parameter(torch.ones(prompt_len, clip_embs.weight.shape[0]), requires_grad=True)
+        self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
+
+    def get_temperature(self) -> float:
+        if self.training:
+            self.temperature = torch.tensor(self.temp_scheduler.get_val())
+            self.temp_scheduler.step()
+        return self.temperature.item()
 
     def forward(self):
-        # TODO: Add temperature
-        y_soft = F.gumbel_softmax(self.prompt_logits, dim=-1)
+        temperature = self.get_temperature()
+        y_soft = F.gumbel_softmax(self.prompt_logits, tau=temperature, dim=-1)
         y_inds = y_soft.argmax(dim=-1)
 
         prompts_soft = y_soft @ self.clip_embs
@@ -88,6 +99,7 @@ class Gumbelv0a1(nn.Module):
         prompts_hard = straight_through(prompts_hard, prompts_soft)
 
         out = Munch(
-            clip_embs=prompts_soft, gpt_embs=prompts_hard, ids=y_inds.cpu().tolist()
+            clip_embs=prompts_soft, gpt_embs=prompts_hard, ids=y_inds.cpu().tolist(),
+            temperature=temperature
         )
         return out

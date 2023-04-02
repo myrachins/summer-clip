@@ -16,10 +16,19 @@ clip_gpt:
   meta_cfg_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model_cfg.yaml
   state_dict_path: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-02-02/22-43-01/checkpoints/epoch_4/step_222605/model.ckpt
 
+# prompt_model:
+#   _target_: summer_clip.clip_prompt.prompt_models.CoOp
+#   prompt_len: 16
+#   dist_p: 2
+
 prompt_model:
-  _target_: summer_clip.clip_prompt.prompt_models.VQVAE2
+  _target_: summer_clip.clip_prompt.prompt_models.Gumbelv0a1
   prompt_len: 16
-  dist_p: 2
+  temp_scheduler:
+    _target_: summer_clip.clip_prompt.temp_schedulers.LinearScheduler
+    start_val: 1.
+    end_val: 0.0625
+    change_iters: 100
 
 tokenizer:
   path: transformers.CLIPTokenizer
@@ -65,7 +74,7 @@ text_batcher:
 
 loss:
   clip: 1.0
-  fluency: 0.1
+  fluency: 0.
 
 # lm_loss:
 #   _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
