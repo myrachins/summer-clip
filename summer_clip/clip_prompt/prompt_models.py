@@ -1,4 +1,5 @@
 import typing as tp
+from abc import ABC, abstractmethod
 
 import torch
 from torch import nn
@@ -75,13 +76,17 @@ class VQVAE2(VQVAE1):
         return out
 
 
-class Gumbelv0a1(nn.Module):
+class GumbelBase(ABC, nn.Module):
     def __init__(self, clip_embs: nn.Embedding, prompt_len: int, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
         super().__init__()
         self.clip_embs = clip_embs.weight.data  # we are not training this one
+        self.prompt_len = prompt_len
         self.temp_scheduler = temp_scheduler
-        self.prompt_logits = nn.Parameter(torch.ones(prompt_len, clip_embs.weight.shape[0]), requires_grad=True)
         self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
+
+    @abstractmethod
+    def get_prompt_logits(self) -> Tensor:
+        pass
 
     def get_temperature(self) -> float:
         if self.training:
@@ -91,7 +96,7 @@ class Gumbelv0a1(nn.Module):
 
     def forward(self):
         temperature = self.get_temperature()
-        y_soft = F.gumbel_softmax(self.prompt_logits, tau=temperature, dim=-1)
+        y_soft = F.gumbel_softmax(self.get_prompt_logits(), tau=temperature, dim=-1)
         y_inds = y_soft.argmax(dim=-1)
 
         prompts_soft = y_soft @ self.clip_embs
@@ -103,3 +108,23 @@ class Gumbelv0a1(nn.Module):
             temperature=temperature
         )
         return out
+
+
+class Gumbelv0a1(GumbelBase):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.prompt_logits = nn.Parameter(torch.ones(self.prompt_len, self.clip_embs.shape[0]), requires_grad=True)
+
+    def get_prompt_logits(self):
+        return self.prompt_logits
+
+
+class Gumbelv1a1(GumbelBase):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.prompt_embs = nn.Parameter(torch.randn(self.prompt_len, self.clip_embs.shape[1]), requires_grad=True)
+        nn.init.normal_(self.prompt_embs, std=0.02)
+
+    def get_prompt_logits(self):
+        prompt_logits = self.prompt_embs @ self.clip_embs.t()
+        return prompt_logits
