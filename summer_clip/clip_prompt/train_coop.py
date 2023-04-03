@@ -150,14 +150,14 @@ class CoOpTrainer(BaseTrainer):
 
     def setup_model(self):
         self.gpt, _ = self._load_gpt_model()
-        self.clip_text, clip_embs, self.logit_scale = self._load_clip_text()
+        self.clip_text, self.clip_embs, self.logit_scale = self._load_clip_text()
         self.prepare_models()
-        self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=clip_embs)
+        self.collator = hydra.utils.instantiate(self.cfg.collator, tokenizer=self.tokenizer, embs=self.clip_embs)
         self.text_batcher = load_obj(self.cfg.text_batcher.path)(
             token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
         )
         self.lm_loss_transformer = hydra.utils.instantiate(self.cfg.lm_loss)
-        self.model = hydra.utils.instantiate(self.cfg.prompt_model, clip_embs=clip_embs).to(self.device)
+        self.model = hydra.utils.instantiate(self.cfg.prompt_model, clip_embs=self.clip_embs).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
         self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
 
@@ -270,6 +270,7 @@ class CoOpTrainer(BaseTrainer):
 
         return epoch_info
 
+    @torch.no_grad()
     def evaluate_val_model(self, model_out):
         text_features = self.compute_text_features(
             model_out.clip_embs, model_out.ids
@@ -282,22 +283,29 @@ class CoOpTrainer(BaseTrainer):
             "eval/acc5": acc5,
         }
 
-    def evaluate_solo_prompt(self, model_out):
+    def get_embs_from_ids(self, input_ids: list[int]):
+        ids = torch.tensor(input_ids, device=self.device)
+        embs = self.clip_embs(ids)
+        return embs
+
+    @torch.no_grad()
+    def evaluate_solo_prompt(self, prompt_embs, prompt_ids):
         lm_batch = self.collator.get_gpt_input(
-            prompt_embs=model_out.gpt_embs, prompt_ids=model_out.ids,
+            prompt_embs=prompt_embs, prompt_ids=prompt_ids,
             input_ids=[[]]
         )
         lm_out = self.gpt(**lm_batch)
         return lm_out.loss.item()
 
-    def evaluate_classes_prompt(self, model_out):
+    @torch.no_grad()
+    def evaluate_classes_prompt(self, prompt_embs, prompt_ids):
         classes_batch_size = self.cfg.training.classes_batch_size
         res_loss = 0.
         for begin_ind in range(0, len(self.token_classes), classes_batch_size):
             end_ind = begin_ind + classes_batch_size
             batch_classes = self.token_classes[begin_ind:end_ind]
             lm_batch = self.collator.get_gpt_input(
-                prompt_embs=model_out.gpt_embs, prompt_ids=model_out.ids,
+                prompt_embs=prompt_embs, prompt_ids=prompt_ids,
                 input_ids=batch_classes
             )
             lm_out = self.gpt(**lm_batch)
@@ -305,25 +313,39 @@ class CoOpTrainer(BaseTrainer):
         res_loss /= len(self.token_classes)
         return res_loss
 
+    @torch.no_grad()
+    def evaluate_clip_prompt(self, prompt_embs, prompt_ids):
+        text_features = self.compute_text_features(prompt_embs, prompt_ids)
+        acc1, acc5 = compute_accuracy_loader(
+            self.val_image_features, text_features, self.loaders['val'], self.device
+        )
+        return acc1, acc5
+
+    @torch.no_grad()
     def evaluate_prompt(self, epoch_num, model_out):
-        prompt_loss = self.evaluate_solo_prompt(model_out)
-        prompt_classes_loss = self.evaluate_classes_prompt(model_out)
+        prompt_embs = self.get_embs_from_ids(model_out.ids)
+        prompt_loss = self.evaluate_solo_prompt(prompt_embs, model_out.ids)
+        prompt_classes_loss = self.evaluate_classes_prompt(prompt_embs, model_out.ids)
+        acc1, acc5 = self.evaluate_clip_prompt(prompt_embs, model_out.ids)
         prompt_tokens = ids_to_tokens(model_out.ids, self.tokenizer)
         prompt_text = self.tokenizer.decode(model_out.ids)
         self.prompt_records.append((
             epoch_num, prompt_loss, prompt_classes_loss,
-            prompt_text, prompt_tokens
+            acc1, acc5, prompt_text, prompt_tokens
         ))
         prompt_table = wandb.Table(data=self.prompt_records, columns=[
             "epoch", "prompt_loss", "prompt_classes_loss",
-            "prompt", "prompt_tokens"
+            "acc1", "acc5", "prompt", "prompt_tokens"
         ])
         return {
             "prompt_table": prompt_table,
             "prompt/prompt_loss": prompt_loss,
             "prompt/prompt_classes_loss": prompt_classes_loss,
+            "prompt/acc1": acc1,
+            "prompt/acc5": acc5,
         }
 
+    @torch.no_grad()
     def save_epoch_model(self, epoch_num):
         print('Evaluating and saving...')
         self.model.eval()
