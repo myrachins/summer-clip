@@ -82,13 +82,14 @@ class GumbelBase(ABC, nn.Module):
         self.clip_embs = clip_embs.weight.data  # we are not training this one
         self.prompt_len = prompt_len
         self.temp_scheduler = temp_scheduler
+        self.logits_log_temperature = nn.Parameter(torch.tensor(1 / 100).log(), requires_grad=True)
         self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
 
     @abstractmethod
     def get_prompt_logits(self) -> Tensor:
         pass
 
-    def get_temperature(self) -> float:
+    def get_temperature(self):
         if self.training:
             self.temperature = torch.tensor(self.temp_scheduler.get_val())
             self.temp_scheduler.step()
@@ -96,7 +97,8 @@ class GumbelBase(ABC, nn.Module):
 
     def forward(self):
         temperature = self.get_temperature()
-        y_soft = F.gumbel_softmax(self.get_prompt_logits(), tau=temperature, dim=-1)
+        logits_temperature = self.logits_log_temperature.exp()
+        y_soft = F.gumbel_softmax(self.get_prompt_logits() / logits_temperature, tau=temperature, dim=-1)
         y_inds = y_soft.argmax(dim=-1)
 
         prompts_soft = y_soft @ self.clip_embs
@@ -105,7 +107,7 @@ class GumbelBase(ABC, nn.Module):
 
         out = Munch(
             clip_embs=prompts_soft, gpt_embs=prompts_hard, ids=y_inds.cpu().tolist(),
-            temperature=temperature
+            temperature=temperature, logits_temperature=logits_temperature.item()
         )
         return out
 

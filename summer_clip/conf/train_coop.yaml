@@ -22,13 +22,11 @@ clip_gpt:
 #   dist_p: 2
 
 prompt_model:
-  _target_: summer_clip.clip_prompt.prompt_models.Gumbelv0a1
+  _target_: summer_clip.clip_prompt.prompt_models.Gumbelv1a1
   prompt_len: 16
   temp_scheduler:
-    _target_: summer_clip.clip_prompt.temp_schedulers.LinearScheduler
-    start_val: 1.
-    end_val: 0.0625
-    change_iters: 100
+    _target_: summer_clip.clip_prompt.temp_schedulers.ConstantScheduler
+    val: 1.
 
 tokenizer:
   path: transformers.CLIPTokenizer
@@ -36,14 +34,20 @@ tokenizer:
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
 
+# optim:
+#   weight_decay: 0.0005
+#   optim_class: torch.optim.SGD
+#   kwargs:
+#     lr: 0.002
+#     momentum: 0.9
+#     dampening: 0
+#     nesterov: false
+
 optim:
   weight_decay: 0.0005
-  optim_class: torch.optim.SGD
+  optim_class: torch.optim.Adam
   kwargs:
     lr: 0.002
-    momentum: 0.9
-    dampening: 0
-    nesterov: false
 
 scheduler:
   name: cosine
@@ -84,7 +88,7 @@ lm_loss:
   _target_: summer_clip.clip_prompt.prompt_learner.FullLMLoss
 
 training:
-  epochs_num: 200
+  epochs_num: 600
   info_steps: 1
   gradient_accumulation_steps: 1
   classes_batch_size: 16
