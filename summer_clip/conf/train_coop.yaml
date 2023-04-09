@@ -34,20 +34,20 @@ tokenizer:
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
 
-# optim:
-#   weight_decay: 0.0005
-#   optim_class: torch.optim.SGD
-#   kwargs:
-#     lr: 0.002
-#     momentum: 0.9
-#     dampening: 0
-#     nesterov: false
-
 optim:
   weight_decay: 0.0005
-  optim_class: torch.optim.Adam
+  optim_class: torch.optim.SGD
   kwargs:
     lr: 0.002
+    momentum: 0.9
+    dampening: 0
+    nesterov: false
+
+# optim:
+#   weight_decay: 0.0005
+#   optim_class: torch.optim.Adam
+#   kwargs:
+#     lr: 0.002
 
 scheduler:
   name: cosine
@@ -80,15 +80,15 @@ loss:
   clip: 1.0
   fluency: 0.
 
-# lm_loss:
-#   _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
-#   prompt_len: ${prompt_model.prompt_len}
-
 lm_loss:
-  _target_: summer_clip.clip_prompt.prompt_learner.FullLMLoss
+  _target_: summer_clip.clip_prompt.prompt_learner.SuffixLMLoss
+  prompt_len: ${prompt_model.prompt_len}
+
+# lm_loss:
+#   _target_: summer_clip.clip_prompt.prompt_learner.FullLMLoss
 
 training:
-  epochs_num: 600
+  epochs_num: 200
   info_steps: 1
   gradient_accumulation_steps: 1
   classes_batch_size: 16
