@@ -81,7 +81,7 @@ def kkmeans(embeddings, num_clusters, threshold=0.00001, max_iter=1000, seed=0, 
         cur_dir = os.listdir(save_dir)
         if centroid_fname in cur_dir:
             print('Loading clusters...')
-            return torch.load(cluster_fname), torch.load(centroid_fname)
+            return torch.load(save_dir + cluster_fname), torch.load(save_dir + centroid_fname)
 
     print('Finding clusters...')
     if seed != -1:

@@ -282,7 +282,7 @@ if __name__ == '__main__':
             run.finish()
 
     if args.run_test_set == -1 and args.run_random == 0:
-        run = wandb.init(config=args, project='backwards', entity=args.wandb_user, reinit=True)
+        run = wandb.init(config=args, project='backwards', entity=args.wandb_user, reinit=True, settings=wandb.Settings(show_emoji=False))
         results = optimise_input(**vars(args))
         wandb.log(results)
         run.finish()
