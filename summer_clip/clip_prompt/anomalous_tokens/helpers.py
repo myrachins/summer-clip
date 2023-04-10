@@ -23,7 +23,7 @@ except:
 utils.logging.set_verbosity_error()
 
 
-def load_all(model_name="gpt2", device='cpu', save_dir=''):
+def load_all(model_name="gpt2", device='cpu', save_dir='data/anomalous_tokens/'):
     print(save_dir)
     if save_dir == '':
         cur_dir = os.listdir()
@@ -66,7 +66,7 @@ def load_all(model_name="gpt2", device='cpu', save_dir=''):
 
 
 def kkmeans(embeddings, num_clusters, threshold=0.00001, max_iter=1000, seed=0, overwrite=False,
-            save_dir='', equal_clusters=False, cluster_dim=-1):
+            save_dir='data/anomalous_tokens/', equal_clusters=False, cluster_dim=-1):
 
     if cluster_dim != -1 and equal_clusters:
         print('WARNING! Equal clusters not supported for dimension clustering.')
@@ -78,7 +78,7 @@ def kkmeans(embeddings, num_clusters, threshold=0.00001, max_iter=1000, seed=0, 
         equal_clusters) + '_' + str(seed) + ' dim' + str(cluster_dim) + '_cluster'
 
     if not overwrite:
-        cur_dir = os.listdir()
+        cur_dir = os.listdir(save_dir)
         if centroid_fname in cur_dir:
             print('Loading clusters...')
             return torch.load(cluster_fname), torch.load(centroid_fname)
