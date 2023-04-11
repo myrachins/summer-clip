@@ -23,6 +23,18 @@ def straight_through(out_val: Tensor, out_grad: Tensor) -> Tensor:
     return out
 
 
+def get_prompt_grads_info(prompt_embs: Tensor, log_dir_name: str = 'prompt_grad_norm') -> Munch:
+    prompt_grad = prompt_embs.grad
+    if prompt_grad is None:
+        return Munch()
+    prompt_grad_norms = prompt_grad.norm(dim=-1).detach().cpu()
+    grad_info = Munch({
+        f"{log_dir_name}/{ind+1}": prompt_grad_norms[ind]
+        for ind in range(len(prompt_grad_norms))
+    })
+    return grad_info
+
+
 class BasePromptModel(nn.Module):
     def __init__(self, clip_embs: nn.Embedding, prompt_len: int, **kwargs: tp.Any) -> None:
         super().__init__()
@@ -55,6 +67,9 @@ class CoOp(BasePromptModel):
                 self.prompt_embs, self.clip_embs, self.dist_p
             ).cpu().tolist()
         return prompt_ids
+
+    def step(self):
+        return get_prompt_grads_info(self.prompt_embs)
 
 
 class VQVAE1(BasePromptModel):
@@ -144,12 +159,4 @@ class Gumbelv1a1(GumbelBase):
         return prompt_logits
 
     def step(self) -> Munch:
-        prompt_grad = self.prompt_embs.grad
-        if prompt_grad is None:
-            return super().step()
-        prompt_grad_norms = prompt_grad.norm(dim=-1).detach().cpu()
-        grad_info = Munch({
-            f"prompt_grad_norm/{ind+1}": prompt_grad_norms[ind]
-            for ind in range(len(prompt_grad_norms))
-        })
-        return grad_info
+        return get_prompt_grads_info(self.prompt_embs)
