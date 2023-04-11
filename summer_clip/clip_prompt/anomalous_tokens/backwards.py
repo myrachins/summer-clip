@@ -196,7 +196,7 @@ def optimise_input(model,
                     closest_embeddings.append(tokenizer.decode(model_outs[b]))
 
             wandb.log({'Closest Embeddings': wandb.Html(
-                ''.join(['<p>{}.{}</p>'.format(i, repr(ce)) for i, ce in enumerate(closest_embeddings)])),
+                ''.join([u'<p>{}.{}</p>'.format(i, repr(ce)).encode('utf-8', 'ignore').decode('utf-8') for i, ce in enumerate(closest_embeddings)])),
                        'Total Loss': total_loss, 'Mean Token Distance': mean_token_dist, 'Mean Loss': batch_loss,
                        'Mean Perplexity Loss': perp_loss, 'Epoch': e, 'LR': optimiser.param_groups[0]['lr'],
                        'Num Inputs Found': len(optimised_inputs), 'Repetition Penalty': rep_penalty})
@@ -224,8 +224,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--no_reinit', action='store_true')
     parser.add_argument('--w_freq', type=int, default=10)
-    parser.add_argument('--rand_input', action='store_true')
-    parser.add_argument('--local_input', action='store_true')
+    # parser.add_argument('--rand_input', action='store_true')
+    # parser.add_argument('--local_input', action='store_true')
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--input_len', type=int, default=10)
     parser.add_argument('--target_output', type=str, default=' world')
@@ -282,7 +282,7 @@ if __name__ == '__main__':
             run.finish()
 
     if args.run_test_set == -1 and args.run_random == 0:
-        run = wandb.init(config=args, project='backwards', entity=args.wandb_user, reinit=True, settings=wandb.Settings(show_emoji=False))
+        run = wandb.init(config=args, project='backwards', entity=args.wandb_user, reinit=True)
         results = optimise_input(**vars(args))
         wandb.log(results)
         run.finish()
