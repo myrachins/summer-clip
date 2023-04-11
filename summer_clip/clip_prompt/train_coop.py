@@ -251,6 +251,7 @@ class CoOpTrainer(BaseTrainer):
             loss.backward()
 
             if step % train_cfg.gradient_accumulation_steps == 0:
+                model_info |= self.model.step()
                 self.optimizer.step()
                 self.scheduler.step()
                 self.optimizer.zero_grad()

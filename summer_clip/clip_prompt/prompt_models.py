@@ -23,13 +23,21 @@ def straight_through(out_val: Tensor, out_grad: Tensor) -> Tensor:
     return out
 
 
-class CoOp(nn.Module):
-    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, dist_p: float, **kwargs: tp.Any) -> None:
+class BasePromptModel(nn.Module):
+    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, **kwargs: tp.Any) -> None:
         super().__init__()
-        self.dist_p = dist_p
         self.prompt_len = prompt_len
         self.clip_embs = clip_embs.weight.data  # we are not training this one
-        self.prompt_embs = nn.Parameter(torch.randn(prompt_len, clip_embs.weight.shape[1]), requires_grad=True)
+
+    def step(self) -> Munch:
+        return Munch()
+
+
+class CoOp(BasePromptModel):
+    def __init__(self, dist_p: float, **kwargs: tp.Any) -> None:
+        super().__init__(**kwargs)
+        self.dist_p = dist_p
+        self.prompt_embs = nn.Parameter(torch.randn(self.prompt_len, self.clip_embs.shape[1]), requires_grad=True)
         nn.init.normal_(self.prompt_embs, std=0.02)
 
     def forward(self):
@@ -49,12 +57,11 @@ class CoOp(nn.Module):
         return prompt_ids
 
 
-class VQVAE1(nn.Module):
-    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, dist_p: float, **kwargs: tp.Any) -> None:
-        super().__init__()
+class VQVAE1(BasePromptModel):
+    def __init__(self, dist_p: float, **kwargs: tp.Any) -> None:
+        super().__init__(**kwargs)
         self.dist_p = dist_p
-        self.clip_embs = clip_embs.weight.data  # we are not training this one
-        self.prompt_embs = nn.Parameter(torch.randn(prompt_len, clip_embs.weight.shape[1]), requires_grad=True)
+        self.prompt_embs = nn.Parameter(torch.randn(self.prompt_len, self.clip_embs.shape[1]), requires_grad=True)
         nn.init.normal_(self.prompt_embs, std=0.02)
 
     def forward(self):
@@ -76,11 +83,9 @@ class VQVAE2(VQVAE1):
         return out
 
 
-class GumbelBase(ABC, nn.Module):
-    def __init__(self, clip_embs: nn.Embedding, prompt_len: int, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
-        super().__init__()
-        self.clip_embs = clip_embs.weight.data  # we are not training this one
-        self.prompt_len = prompt_len
+class GumbelBase(ABC, BasePromptModel):
+    def __init__(self, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
+        super().__init__(**kwargs)
         self.temp_scheduler = temp_scheduler
         self.logits_log_temperature = torch.tensor(1 / 100).log()  # no training
         self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
@@ -125,10 +130,26 @@ class Gumbelv0a1(GumbelBase):
 class Gumbelv1a1(GumbelBase):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.prompt_embs = nn.Parameter(torch.randn(self.prompt_len, self.clip_embs.shape[1]), requires_grad=True)
+        emb_dim = self.clip_embs.shape[1]
+        # self.dim_sqrt = emb_dim ** 0.5
+        # self.layer_norm = nn.LayerNorm(emb_dim)
+        self.prompt_embs = nn.Parameter(torch.randn(self.prompt_len, emb_dim), requires_grad=True)
         nn.init.normal_(self.prompt_embs, std=0.02)
 
     def get_prompt_logits(self):
+        # prompt_embs = self.layer_norm(self.prompt_embs)
         # prompt_embs = self.prompt_embs / self.prompt_embs.norm(dim=1, keepdim=True)
+        # prompt_logits = prompt_embs @ self.clip_embs.t() / self.dim_sqrt
         prompt_logits = self.prompt_embs @ self.clip_embs.t()
         return prompt_logits
+
+    def step(self) -> Munch:
+        prompt_grad = self.prompt_embs.grad
+        if prompt_grad is None:
+            return super().step()
+        prompt_grad_norms = prompt_grad.norm(dim=-1).detach().cpu()
+        grad_info = Munch({
+            f"prompt_grad_norm/{ind+1}": prompt_grad_norms[ind]
+            for ind in range(len(prompt_grad_norms))
+        })
+        return grad_info
