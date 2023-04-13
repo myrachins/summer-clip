@@ -61,7 +61,7 @@ data_loader:
     num_workers: 0
   val:
     batch_size: 32
-    shuffle: true
+    shuffle: false
     pin_memory: true
     num_workers: 0
 
