@@ -115,11 +115,23 @@ class GumbelBase(ABC, BasePromptModel):
             self.temp_scheduler.step()
         return self.temperature.item()
 
+    def get_weights_info(self, weights: Tensor) -> Munch:
+        out = Munch({
+            "weights/min": weights.min().item(),
+            "weights/max": weights.max().item(),
+            "weights/mean": weights.mean().item(),
+            "weights/median": weights.median().item(),
+            "weights/quant_75": weights.quantile(0.75).item(),
+            "weights/quant_25": weights.quantile(0.25).item(),
+        })
+        return out
+
     def forward(self):
         temperature = self.get_temperature()
         logits_temperature = self.logits_log_temperature.exp()
         # y_soft = F.gumbel_softmax(self.get_prompt_logits() / logits_temperature, tau=temperature, dim=-1)
-        y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
+        # y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
+        y_soft = F.relu(self.get_prompt_logits() / logits_temperature)
         y_inds = y_soft.argmax(dim=-1)
 
         prompts_soft = y_soft @ self.clip_embs
@@ -128,7 +140,8 @@ class GumbelBase(ABC, BasePromptModel):
 
         out = Munch(
             clip_embs=prompts_soft, gpt_embs=prompts_hard, ids=y_inds.cpu().tolist(),
-            temperature=temperature, logits_temperature=logits_temperature.item()
+            temperature=temperature, logits_temperature=logits_temperature.item(),
+            **self.get_weights_info(y_soft)
         )
         return out
 
