@@ -334,17 +334,19 @@ class CoOpTrainer(BaseTrainer):
             epoch_num, prompt_loss, prompt_classes_loss,
             acc1, acc5, prompt_text, prompt_tokens
         ))
-        prompt_table = wandb.Table(data=self.prompt_records, columns=[
-            "epoch", "prompt_loss", "prompt_classes_loss",
-            "acc1", "acc5", "prompt", "prompt_tokens"
-        ])
-        return {
-            "prompt_table": prompt_table,
+        eval_results = {
             "prompt/prompt_loss": prompt_loss,
             "prompt/prompt_classes_loss": prompt_classes_loss,
             "prompt/acc1": acc1,
             "prompt/acc5": acc5,
         }
+        if epoch_num % self.cfg.training.prompts_table_update_epochs == 0:
+            prompt_table = wandb.Table(data=self.prompt_records, columns=[
+                "epoch", "prompt_loss", "prompt_classes_loss",
+                "acc1", "acc5", "prompt", "prompt_tokens"
+            ])
+            eval_results["prompt_table"] = prompt_table
+        return eval_results
 
     @torch.no_grad()
     def save_epoch_model(self, epoch_num):

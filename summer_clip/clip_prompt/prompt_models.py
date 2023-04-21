@@ -115,23 +115,36 @@ class GumbelBase(ABC, BasePromptModel):
             self.temp_scheduler.step()
         return self.temperature.item()
 
-    def get_weights_info(self, weights: Tensor) -> Munch:
+    def get_weights_stats(self, weights: Tensor, weights_suffix: str | int) -> Munch:
         out = Munch({
-            "weights/min": weights.min().item(),
-            "weights/max": weights.max().item(),
-            "weights/mean": weights.mean().item(),
-            "weights/median": weights.median().item(),
-            "weights/quant_75": weights.quantile(0.75).item(),
-            "weights/quant_25": weights.quantile(0.25).item(),
+            "min": weights.min().item(),
+            "max": weights.max().item(),
+            "mean": weights.mean().item(),
+            "median": weights.median().item(),
+            "quant_75": weights.quantile(0.75).item(),
+            "quant_25": weights.quantile(0.25).item(),
         })
+        out = Munch({
+            f"weights{weights_suffix}/{name}": value for name, value in out.items()
+        })
+        return out
+
+    def get_weights_info(self, weights: Tensor) -> Munch:
+        out = self.get_weights_stats(weights, weights_suffix="")
+        for weight_ind in (0, -1):
+            out |= self.get_weights_stats(weights[weight_ind], weights_suffix=f"_{weight_ind}")
         return out
 
     def forward(self):
         temperature = self.get_temperature()
         logits_temperature = self.logits_log_temperature.exp()
+        # y_soft = self.get_prompt_logits() / logits_temperature
         # y_soft = F.gumbel_softmax(self.get_prompt_logits() / logits_temperature, tau=temperature, dim=-1)
         # y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
+        # y_soft = y_soft * self.mask.to(y_soft.device)
+        # y_soft = y_soft / y_soft.sum(dim=-1, keepdim=True)
         y_soft = F.relu(self.get_prompt_logits() / logits_temperature)
+        # y_soft = y_soft / y_soft.sum(dim=-1, keepdim=True)
         y_inds = y_soft.argmax(dim=-1)
 
         prompts_soft = y_soft @ self.clip_embs

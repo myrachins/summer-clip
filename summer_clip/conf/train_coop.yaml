@@ -34,20 +34,20 @@ tokenizer:
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
 
-# optim:
-#   weight_decay: 0.0005
-#   optim_class: torch.optim.SGD
-#   kwargs:
-#     lr: 0.002
-#     momentum: 0.9
-#     dampening: 0
-#     nesterov: false
-
 optim:
   weight_decay: 0.0005
-  optim_class: torch.optim.Adam
+  optim_class: torch.optim.SGD
   kwargs:
     lr: 0.002
+    momentum: 0.9
+    dampening: 0
+    nesterov: false
+
+# optim:
+#   weight_decay: 0.0005
+#   optim_class: torch.optim.Adam
+#   kwargs:
+#     lr: 0.002
 
 scheduler:
   name: cosine
@@ -93,6 +93,7 @@ training:
   gradient_accumulation_steps: 1
   classes_batch_size: 16
   new_top_prompts_each_epoch: false
+  prompts_table_update_epochs: 50
   checkpoints_dir: checkpoints/
 
 log:
