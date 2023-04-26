@@ -8,6 +8,7 @@ from munch import Munch
 from torch.nn import functional as F
 
 from summer_clip.clip_prompt.temp_schedulers import Scheduler
+from summer_clip.clip_prompt.prompt_learner import GPTEmbed
 
 
 def find_nearest(prompt_embs: Tensor, clip_embs: Tensor, p: float) -> Tensor:
@@ -41,6 +42,7 @@ class BasePromptModel(nn.Module):
         super().__init__()
         self.prompt_len = prompt_len
         self.clip_embs = clip_embs.weight.data  # we are not training this one
+        self.allowed_tokens = allowed_tokens
 
         if allowed_tokens is not None:
             self.clip_embs = self.clip_embs[allowed_tokens]
@@ -201,3 +203,75 @@ class Gumbelv1a1(GumbelBase):
 
     def step(self) -> Munch:
         return get_prompt_grads_info(self.prompt_embs)
+
+
+class EmbsAdapter(nn.Module):
+    def __init__(self, embs_dim: int, hidden_dim: int):
+        super().__init__()
+        self.blocks = nn.Sequential(
+            nn.Linear(embs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, embs_dim),
+        )
+        self.init_blocks()
+
+    def init_blocks(self):
+        # Is based on RL-Prompt
+        def init_weights(module):
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight, gain=0.0001)
+                module.bias.data.fill_(-0.0001)
+        self.blocks.apply(init_weights)
+
+    def forward(self, x):
+        y = self.blocks(x)
+        y = y + x
+        return y
+
+
+class NotTrainable:
+    def __init__(self, param):
+        self.param = param
+
+    def __getattr__(self, name: str):
+        return getattr(self.param, name)
+
+
+class Gumbelv3a1(GumbelBase):
+    def __init__(self, clip_embs: nn.Embedding, gpt: GPTEmbed, tokenizer, hidden_dim: int, **kwargs) -> None:
+        super().__init__(clip_embs=clip_embs, **kwargs)
+        self.bos_token_emb = clip_embs.weight.data[tokenizer.bos_token_id]  # do not train
+        gpt_emb_dim: int = gpt.gpt.config.n_embd  # type: ignore
+        self.gpt: tp.Any = NotTrainable(gpt)
+        self.adapter = EmbsAdapter(gpt_emb_dim, hidden_dim)
+
+    def select_allowed_tokens(self, logits: Tensor) -> Tensor:
+        if self.allowed_tokens is not None:
+            logits = logits[self.allowed_tokens]
+        return logits
+
+    def get_prompt_logits(self):
+        past_key_values = None
+        prompt_list_logits = []
+        input_embs = self.bos_token_emb.unsqueeze(0).unsqueeze(0)  # [1, 1, emb_dim]
+        for _ in range(self.prompt_len):
+            gpt_out = self.gpt.__call__(
+                inputs_embeds=input_embs, past_key_values=past_key_values,
+                use_cache=True, output_hidden_states=True
+            )
+            past_key_values = gpt_out.past_key_values
+            hidden_state = gpt_out.hidden_states[-1][:, -1, :]
+            hidden_state = self.adapter(hidden_state)
+            logits = self.gpt.gpt.lm_head(hidden_state)
+            logits = self.select_allowed_tokens(logits)
+            probs = F.softmax(logits, dim=1)  # [1, vocab_dim]
+            pred_emb = probs @ self.clip_embs  # [1, emb_dim]
+            input_embs = pred_emb.unsqueeze(0)  # [1, 1, emb_dim]
+            prompt_list_logits.append(logits.squeeze(0))
+        prompt_logits = torch.stack(prompt_list_logits, dim=0)
+        return prompt_logits
+
+    @property
+    def device(self):
+        param = next(iter(self.adapter.parameters()))
+        return param.device

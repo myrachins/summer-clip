@@ -166,7 +166,8 @@ class CoOpTrainer(BaseTrainer):
         )
         self.lm_loss_transformer = hydra.utils.instantiate(self.cfg.lm_loss)
         self.model = hydra.utils.instantiate(
-            self.cfg.prompt_model, clip_embs=self.clip_embs, allowed_tokens=self.get_allowed_tokens()
+            self.cfg.prompt_model, clip_embs=self.clip_embs, allowed_tokens=self.get_allowed_tokens(),
+            gpt=self.gpt, tokenizer=self.tokenizer
         ).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
         self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
