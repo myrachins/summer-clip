@@ -141,6 +141,14 @@ class CoOpTrainer(BaseTrainer):
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         return image_features
 
+    def get_allowed_tokens(self):
+        vocab_filter = load_obj(self.cfg.vocab_filter.path)(
+            clip_tokenizer=self.tokenizer, clip_embs=self.clip_embs,
+            **self.cfg.vocab_filter.kwargs
+        )
+        allowed_tokens = vocab_filter.get_allowed_tokens()
+        return allowed_tokens
+
     def prepare_models(self):
         self.gpt.eval()
         self.clip_text.eval()
@@ -157,7 +165,9 @@ class CoOpTrainer(BaseTrainer):
             token_classes=self.token_classes, text_classes=self.text_classes, **self.cfg.text_batcher.kwargs
         )
         self.lm_loss_transformer = hydra.utils.instantiate(self.cfg.lm_loss)
-        self.model = hydra.utils.instantiate(self.cfg.prompt_model, clip_embs=self.clip_embs).to(self.device)
+        self.model = hydra.utils.instantiate(
+            self.cfg.prompt_model, clip_embs=self.clip_embs, allowed_tokens=self.get_allowed_tokens()
+        ).to(self.device)
         self.image_features = self._load_image_features(self.cfg.clip.image_features_path)
         self.val_image_features = self._load_image_features(self.cfg.clip.val_image_features_path)
 

@@ -22,8 +22,8 @@ clip_gpt:
 #   dist_p: 2
 
 prompt_model:
-  _target_: summer_clip.clip_prompt.prompt_models.Gumbelv1a1
-  prompt_len: 16
+  _target_: summer_clip.clip_prompt.prompt_models.Gumbelv0a1
+  prompt_len: 5
   temp_scheduler:
     _target_: summer_clip.clip_prompt.temp_schedulers.ConstantScheduler
     val: 1.
@@ -75,6 +75,11 @@ collator:
 text_batcher:
   path: summer_clip.clip_prompt.prompt_learner.ImageTextBatcher
   kwargs: {}
+
+vocab_filter:
+  path: summer_clip.clip_prompt.vocab_filters.AllowedTokensFilter
+  kwargs:
+    allowed_tokens: ['a', 'centered', 'satellite', 'photo', 'of']
 
 loss:
   clip: 1.0
