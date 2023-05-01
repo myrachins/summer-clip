@@ -1,3 +1,5 @@
+import re
+import string
 import typing as tp
 from abc import ABC, abstractmethod
 
@@ -10,10 +12,8 @@ class BaseVocabFilter(ABC):
         self.clip_embs = clip_embs
         self.clip_tokenizer = clip_tokenizer
 
-    def tokenize_tokens(self, tokens: list[str]) -> tp.Any:
-        ids = self.clip_tokenizer(
-            list(tokens), add_special_tokens=False, is_split_into_words=True
-        )['input_ids']
+    def tokenize_tokens(self, tokens: list[str]) -> list[int]:
+        ids = [self.clip_tokenizer.encoder[token] for token in tokens]
         return ids
 
     @abstractmethod
@@ -29,12 +29,9 @@ class NoFilter(BaseVocabFilter):
 
 
 class AllowedTokensFilter(BaseVocabFilter):
-    def __init__(self, allowed_tokens: list[str], check_tokens_single: bool = True, **kwargs):
+    def __init__(self, allowed_tokens: list[str], **kwargs):
         super().__init__(**kwargs)
         self.tokens_ids = self.tokenize_tokens(allowed_tokens)  # type: ignore
-
-        if check_tokens_single and len(self.tokens_ids) != len(allowed_tokens):
-            raise ValueError("Lens of the ids and tokens do not match")
 
     def get_allowed_tokens(self):
         return self.tokens_ids
@@ -49,3 +46,31 @@ class NotAllowedTokensFilter(BaseVocabFilter):
 
     def get_allowed_tokens(self):
         return self.allowed_ids
+
+
+class FilterNonBasicStrong(BaseVocabFilter):
+    def __init__(self, keep_english: bool, keep_numbers: bool, keep_punctuation: bool, **kwargs):
+        super().__init__(**kwargs)
+        patterns = []
+        if keep_english:
+            patterns.append(r"[a-zA-Z]+")
+        if keep_numbers:
+            patterns.append(r"[0-9]+")
+        if keep_punctuation:
+            patterns.append(f"[{re.escape(string.punctuation)}]+")
+        pattern = re.compile("^(" + "|".join(patterns) + ")$")
+
+        allowed_tokens = [
+            token for token in self.clip_tokenizer.encoder
+            if pattern.match(self.clean_suffix(token))
+        ]
+        self.filter = AllowedTokensFilter(allowed_tokens, **kwargs)
+
+    def clean_suffix(self, token):
+        suffix = "</w>"
+        if token.endswith(suffix):
+            token = token[:-len(suffix)]
+        return token
+
+    def get_allowed_tokens(self):
+        return self.filter.get_allowed_tokens()
