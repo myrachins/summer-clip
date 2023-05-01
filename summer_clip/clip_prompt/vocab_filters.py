@@ -4,6 +4,7 @@ import typing as tp
 from abc import ABC, abstractmethod
 
 from torch import nn
+from omegaconf import OmegaConf
 from transformers import CLIPTokenizer
 
 
@@ -29,8 +30,10 @@ class NoFilter(BaseVocabFilter):
 
 
 class AllowedTokensFilter(BaseVocabFilter):
-    def __init__(self, allowed_tokens: list[str], **kwargs):
+    def __init__(self, allowed_tokens: list[str], check_unique: bool = True, **kwargs):
         super().__init__(**kwargs)
+        if check_unique and len(set(allowed_tokens)) != len(allowed_tokens):
+            raise ValueError("Some of the tokens are duplicated")
         self.tokens_ids = self.tokenize_tokens(allowed_tokens)  # type: ignore
 
     def get_allowed_tokens(self):
@@ -74,3 +77,21 @@ class FilterNonBasicStrong(BaseVocabFilter):
 
     def get_allowed_tokens(self):
         return self.filter.get_allowed_tokens()
+
+
+class PromptsUnionFilter(BaseVocabFilter):
+    def __init__(self, prompts_paths: tuple[str, ...] = (), classes_paths: tuple[str, ...] = (), **kwargs):
+        super().__init__(**kwargs)
+        prompts, classes = [], []
+        for prompts_path in prompts_paths:
+            path_prompts = OmegaConf.load(prompts_path)['templates']  # type: ignore
+            prompts += [prompt.format('') for prompt in path_prompts]
+        for classes_path in classes_paths:
+            classes += list(OmegaConf.load(classes_path)['classes'])  # type: ignore
+
+        union_texts = prompts + classes
+        union_ids: tp.Any = self.clip_tokenizer(union_texts, add_special_tokens=False)['input_ids']
+        self.union_ids = list({token_ids for sent_ids in union_ids for token_ids in sent_ids})
+
+    def get_allowed_tokens(self):
+        return self.union_ids

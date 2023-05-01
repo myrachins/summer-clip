@@ -93,12 +93,20 @@ text_batcher:
 #   path: summer_clip.clip_prompt.vocab_filters.NoFilter
 #   kwargs: {}
 
+# vocab_filter:
+#   path: summer_clip.clip_prompt.vocab_filters.FilterNonBasicStrong
+#   kwargs:
+#     keep_english: true
+#     keep_numbers: true
+#     keep_punctuation: true
+
 vocab_filter:
-  path: summer_clip.clip_prompt.vocab_filters.FilterNonBasicStrong
+  path: summer_clip.clip_prompt.vocab_filters.PromptsUnionFilter
   kwargs:
-    keep_english: true
-    keep_numbers: true
-    keep_punctuation: true
+    prompts_paths:
+      - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/imagenet.yaml
+    classes_paths: 
+      - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/tip_eurosat.yaml
 
 loss:
   clip: 1.0
