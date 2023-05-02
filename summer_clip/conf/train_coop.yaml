@@ -31,10 +31,16 @@ clip_gpt:
 prompt_model:
   _target_: summer_clip.clip_prompt.prompt_models.Gumbelv3a1
   prompt_len: 5
+  # gpt_cfg:
+  #   path: summer_clip.clip_prompt.gpt_logits.AdapterGPT
+  #   kwargs:
+  #     hidden_dim: 128
   gpt_cfg:
-    path: summer_clip.clip_prompt.gpt_logits.AdapterGPT
+    path: summer_clip.clip_prompt.gpt_logits.LoRAGPT
     kwargs:
-      hidden_dim: 128
+      r: 8
+      lora_alpha: 32
+      lora_dropout: 0.0
   temp_scheduler:
     _target_: summer_clip.clip_prompt.temp_schedulers.ConstantScheduler
     val: 1.
@@ -45,20 +51,20 @@ tokenizer:
   set_pad_as_eos: false
   tokenize_classes_kwargs: {}
 
-optim:
-  weight_decay: 0.0005
-  optim_class: torch.optim.SGD
-  kwargs:
-    lr: 0.002
-    momentum: 0.9
-    dampening: 0
-    nesterov: false
-
 # optim:
 #   weight_decay: 0.0005
-#   optim_class: torch.optim.Adam
+#   optim_class: torch.optim.SGD
 #   kwargs:
-#     lr: 3e-4
+#     lr: 0.002
+#     momentum: 0.9
+#     dampening: 0
+#     nesterov: false
+
+optim:
+  weight_decay: 0.0005
+  optim_class: torch.optim.Adam
+  kwargs:
+    lr: 3e-4
 
 scheduler:
   name: cosine
@@ -96,20 +102,20 @@ text_batcher:
 #   path: summer_clip.clip_prompt.vocab_filters.NoFilter
 #   kwargs: {}
 
-# vocab_filter:
-#   path: summer_clip.clip_prompt.vocab_filters.FilterNonBasicStrong
-#   kwargs:
-#     keep_english: true
-#     keep_numbers: true
-#     keep_punctuation: true
-
 vocab_filter:
-  path: summer_clip.clip_prompt.vocab_filters.PromptsUnionFilter
+  path: summer_clip.clip_prompt.vocab_filters.FilterNonBasicStrong
   kwargs:
-    prompts_paths:
-      - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/imagenet.yaml
-    classes_paths: 
-      - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/tip_eurosat.yaml
+    keep_english: true
+    keep_numbers: true
+    keep_punctuation: true
+
+# vocab_filter:
+#   path: summer_clip.clip_prompt.vocab_filters.PromptsUnionFilter
+#   kwargs:
+#     prompts_paths:
+#       - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/imagenet.yaml
+#     classes_paths: 
+#       - /home/myurachinskiy/CLIP/summer-clip/summer_clip/conf/prompting/tip_eurosat.yaml
 
 loss:
   clip: 1.0
