@@ -59,8 +59,10 @@ class LoRAGPT(nn.Module):
     def __init__(self, gpt: GPTEmbed, **kwargs):
         super().__init__()
         peft_config = LoraConfig(task_type=TaskType.CAUSAL_LM, **kwargs)
-        self.gpt = get_peft_model(gpt, peft_config)
+        gpt.gpt = get_peft_model(gpt.gpt, peft_config)
+        self.gpt = gpt
 
     def forward(self, **kwargs):
         gpt_out = self.gpt(**kwargs)
+        gpt_out.logits = gpt_out.logits[:, -1, :]
         return gpt_out

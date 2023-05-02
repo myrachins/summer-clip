@@ -6,11 +6,9 @@ from torch import nn
 from torch import Tensor
 from transformers import DataCollatorForLanguageModeling
 
-from summer_clip.clip_prompt.gpt import ClipGPT
-
 
 class GPTEmbed(nn.Module):
-    def __init__(self, gpt: ClipGPT) -> None:
+    def __init__(self, gpt) -> None:
         super().__init__()
         self.gpt = gpt
 
