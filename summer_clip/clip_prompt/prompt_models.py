@@ -6,7 +6,9 @@ from torch import nn
 from torch import Tensor
 from munch import Munch
 from torch.nn import functional as F
+from omegaconf import DictConfig
 
+from summer_clip.utils.hydra_utils import load_obj
 from summer_clip.clip_prompt.temp_schedulers import Scheduler
 from summer_clip.clip_prompt.prompt_learner import GPTEmbed
 
@@ -117,7 +119,7 @@ class GumbelBase(ABC, BasePromptModel):
     def __init__(self, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
         super().__init__(**kwargs)
         self.temp_scheduler = temp_scheduler
-        self.logits_log_temperature = torch.tensor(1 / 100).log()  # no training
+        self.logits_log_temperature = torch.tensor(1).log()  # no training
         self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
 
     @abstractmethod
@@ -153,10 +155,10 @@ class GumbelBase(ABC, BasePromptModel):
     def forward(self):
         temperature = self.get_temperature()
         logits_temperature = self.logits_log_temperature.exp()
-        # y_soft = self.get_prompt_logits()
+        y_soft = self.get_prompt_logits()
         # y_soft = self.get_prompt_logits() / logits_temperature
         # y_soft = F.gumbel_softmax(self.get_prompt_logits() / logits_temperature, tau=temperature, dim=-1)
-        y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
+        # y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
         # y_soft = F.relu(self.get_prompt_logits() / logits_temperature)
         # y_soft = y_soft / y_soft.sum(dim=-1, keepdim=True)
         y_inds = y_soft.argmax(dim=-1)
@@ -205,49 +207,15 @@ class Gumbelv1a1(GumbelBase):
         return get_prompt_grads_info(self.prompt_embs)
 
 
-class EmbsAdapter(nn.Module):
-    def __init__(self, embs_dim: int, hidden_dim: int):
-        super().__init__()
-        self.blocks = nn.Sequential(
-            nn.Linear(embs_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, embs_dim),
-        )
-        self.init_blocks()
-
-    def init_blocks(self):
-        # Is based on RL-Prompt
-        def init_weights(module):
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight, gain=0.0001)
-                module.bias.data.fill_(-0.0001)
-        self.blocks.apply(init_weights)
-
-    def forward(self, x):
-        y = self.blocks(x)
-        y = y + x
-        return y
-
-
-class NotTrainable:
-    def __init__(self, param):
-        self.param = param
-
-    def __getattr__(self, name: str):
-        return getattr(self.param, name)
-
-
 class Gumbelv3a1(GumbelBase):
-    def __init__(self, clip_embs: nn.Embedding, gpt: GPTEmbed, tokenizer, hidden_dim: int, **kwargs) -> None:
+    def __init__(self, clip_embs: nn.Embedding, gpt: GPTEmbed, tokenizer, gpt_cfg: DictConfig, **kwargs) -> None:
         super().__init__(clip_embs=clip_embs, **kwargs)
         self.bos_token_emb = clip_embs.weight.data[tokenizer.bos_token_id]  # do not train
-        gpt_emb_dim: int = gpt.gpt.config.n_embd  # type: ignore
-        self.gpt: tp.Any = NotTrainable(gpt)
-        self.adapter = EmbsAdapter(gpt_emb_dim, hidden_dim)
+        self.gpt = load_obj(gpt_cfg.path)(**gpt_cfg.kwargs, gpt=gpt)
 
     def select_allowed_tokens(self, logits: Tensor) -> Tensor:
         if self.allowed_tokens is not None:
-            logits = logits[self.allowed_tokens]
+            logits = logits[:, self.allowed_tokens]
         return logits
 
     def get_prompt_logits(self):
@@ -255,23 +223,20 @@ class Gumbelv3a1(GumbelBase):
         prompt_list_logits = []
         input_embs = self.bos_token_emb.unsqueeze(0).unsqueeze(0)  # [1, 1, emb_dim]
         for _ in range(self.prompt_len):
-            gpt_out = self.gpt.__call__(
+            gpt_out = self.gpt(
                 inputs_embeds=input_embs, past_key_values=past_key_values,
                 use_cache=True, output_hidden_states=True
             )
             past_key_values = gpt_out.past_key_values
-            hidden_state = gpt_out.hidden_states[-1][:, -1, :]
-            hidden_state = self.adapter(hidden_state)
-            logits = self.gpt.gpt.lm_head(hidden_state)
-            logits = self.select_allowed_tokens(logits)
+            logits = self.select_allowed_tokens(gpt_out.logits)
             probs = F.softmax(logits, dim=1)  # [1, vocab_dim]
             pred_emb = probs @ self.clip_embs  # [1, emb_dim]
             input_embs = pred_emb.unsqueeze(0)  # [1, 1, emb_dim]
-            prompt_list_logits.append(logits.squeeze(0))
+            prompt_list_logits.append(probs.squeeze(0))
         prompt_logits = torch.stack(prompt_list_logits, dim=0)
         return prompt_logits
 
     @property
     def device(self):
-        param = next(iter(self.adapter.parameters()))
+        param = next(iter(self.parameters()))
         return param.device

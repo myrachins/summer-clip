@@ -379,10 +379,10 @@ class CoOpTrainer(BaseTrainer):
         eval_model = self.evaluate_val_model(model_out)
         eval_prompt = self.evaluate_prompt(epoch_num, model_out)
         self.logger.exp_logger.log(eval_model | eval_prompt)
-        save_epoch_model(
-            self.model, optimizer=None, scheduler=None,
-            epoch_num=epoch_num, checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
-        )
+        # save_epoch_model(
+        #     self.model, optimizer=None, scheduler=None,
+        #     epoch_num=epoch_num, checkpoints_dir=Path(self.cfg.training.checkpoints_dir)
+        # )
 
 
 @hydra.main(config_path='../conf', config_name='train_coop', version_base='1.1')
