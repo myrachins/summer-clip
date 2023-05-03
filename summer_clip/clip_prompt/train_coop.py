@@ -226,17 +226,22 @@ class CoOpTrainer(BaseTrainer):
 
     def make_model_info(self, model_out):
         model_info = copy(model_out)
-        for pop_name in ('clip_embs', 'gpt_embs', 'ids'):
-            model_info.pop(pop_name)
+        for pop_name in ('clip_embs', 'gpt_embs', 'ids', 'entropy_loss'):
+            model_info.pop(pop_name, None)
         return model_info
 
     def compute_full_metrics(self, labels, indexes):
         model_out = self.model()
         clip_metrics = self.compute_clip_metrics(labels, indexes, model_out.clip_embs, model_out.ids)
         lm_loss = self.compute_lm_loss(labels, model_out.gpt_embs, model_out.ids)
-        loss = self.cfg.loss.clip * clip_metrics.clip_loss + self.cfg.loss.fluency * lm_loss
+        entropy_loss = model_out.get('entropy_loss', torch.zeros_like(lm_loss))
+        loss = (
+            self.cfg.loss.clip * clip_metrics.clip_loss +  # noqa
+            self.cfg.loss.fluency * lm_loss +  # noqa
+            self.cfg.loss.entropy * entropy_loss
+        )
         metrics = Munch(
-            loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss,
+            loss=loss, lm_loss=lm_loss, clip_loss=clip_metrics.clip_loss, entropy_loss=entropy_loss,
             acc1=clip_metrics.acc1, acc5=clip_metrics.acc5
         )
         model_info = self.make_model_info(model_out)
@@ -285,6 +290,7 @@ class CoOpTrainer(BaseTrainer):
                     "steps": completed_steps,
                     "loss/train": metrics.loss.item(),
                     "loss/clip": metrics.clip_loss.item(),
+                    "loss/entropy": metrics.entropy_loss.item(),
                     "loss/lm": metrics.lm_loss.item(),
                     "acc/top1": metrics.acc1,
                     "acc/top5": metrics.acc5,

@@ -119,7 +119,7 @@ class GumbelBase(ABC, BasePromptModel):
     def __init__(self, temp_scheduler: Scheduler, **kwargs: tp.Any) -> None:
         super().__init__(**kwargs)
         self.temp_scheduler = temp_scheduler
-        self.logits_log_temperature = torch.tensor(1).log()  # no training
+        self.logits_log_temperature = torch.tensor(1 / 100).log()  # no training
         self.register_buffer('temperature', torch.tensor(self.temp_scheduler.get_val()))
 
     @abstractmethod
@@ -155,10 +155,10 @@ class GumbelBase(ABC, BasePromptModel):
     def forward(self):
         temperature = self.get_temperature()
         logits_temperature = self.logits_log_temperature.exp()
-        y_soft = self.get_prompt_logits()
+        # y_soft = self.get_prompt_logits()
         # y_soft = self.get_prompt_logits() / logits_temperature
         # y_soft = F.gumbel_softmax(self.get_prompt_logits() / logits_temperature, tau=temperature, dim=-1)
-        # y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
+        y_soft = F.softmax(self.get_prompt_logits() / logits_temperature, dim=-1)
         # y_soft = F.relu(self.get_prompt_logits() / logits_temperature)
         # y_soft = y_soft / y_soft.sum(dim=-1, keepdim=True)
         y_inds = y_soft.argmax(dim=-1)
