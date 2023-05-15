@@ -17,11 +17,11 @@ from summer_clip.clip_searcher.cache_strategy import CacheStrategy, IndexedCache
 class ImageAttention(BaseTrainer):
     def setup_dataset(self):
         self.dataset = hydra.utils.instantiate(self.cfg.dataset)
-        self.test_labels = load_labels(self.dataset).to(self.cfg.meta.device)
+        self.test_labels = load_labels(self.dataset).to(self.device)
         self.cache_labels: tp.Optional[torch.Tensor] = None
         if self.cfg.cache.dataset:
             cache_dataset = hydra.utils.instantiate(self.cfg.cache.dataset)
-            self.cache_labels = load_labels(cache_dataset).to(self.cfg.meta.device)
+            self.cache_labels = load_labels(cache_dataset).to(self.device)
         if self.cfg.run_saves.save_labels:
             self.save_labels()
 
@@ -40,7 +40,9 @@ class ImageAttention(BaseTrainer):
         clip_model, _ = clip.load(self.cfg.clip.model_name, device, jit=False)
         clip_classes = self.cfg.prompting.classes or self.dataset.classes
 
-        test_text_features = eval_clip.zeroshot_classifier(clip_model, clip_classes, self.cfg.prompting.templates)
+        test_text_features = eval_clip.zeroshot_classifier(
+            clip_model, clip_classes, self.cfg.prompting.templates, device=device  # type: ignore
+        )
         return test_text_features.to(device)
 
     def build_cache(self, cache_strategy: CacheStrategy, image_features: torch.Tensor, image_outs: torch.Tensor) \
@@ -61,20 +63,18 @@ class ImageAttention(BaseTrainer):
             eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
             cache_info.update(dict(acc1=eval_top1, acc5=eval_top5))
             if self.cfg.cache.get('replace_outs_with_golds', False):
-                cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).half()
+                cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).float()
                 eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
                 cache_info.update(dict(acc1_replace=eval_top1, acc5_replace=eval_top5))
 
         return cache_image_features, cache_image_outs, cache_info
 
     def setup_model(self):
-        device = torch.device(self.cfg.meta.device)
+        self.test_text_features = self.load_test_text_features(self.device).float()
+        self.test_image_features = torch.load(self.cfg.data.image_features_path, map_location=self.device).float()
 
-        self.test_text_features = self.load_test_text_features(device)
-        self.test_image_features = torch.load(self.cfg.data.image_features_path).to(device)
-
-        self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path).to(device)
-        self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path).to(device)
+        self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path, map_location=self.device).float()
+        self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path, map_location=self.device).float()
         self.logger.log_info(f'original-data-size: {self.origin_cache_image_outs.shape[0]}')
 
     def compute_clip_logits(self) -> torch.Tensor:

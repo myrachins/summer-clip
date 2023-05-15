@@ -2,7 +2,7 @@ defaults:
   - hydra_setup
   - adapter_setup
   - saved_paths: clip_paths
-  - img_attn_dataset@dataset_cfg: eurosat
+  - img_attn_dataset@dataset_cfg: stanford_cars
   - _self_
   - cache_value_strategy: hard_cache
   - cache_weights_strategy: tip_adapter

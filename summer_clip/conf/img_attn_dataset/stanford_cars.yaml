@@ -1,0 +1,12 @@
+defaults:
+  - /dataset: tip_stanford_cars_test_no_image
+  - /dataset@cache.dataset: tip_stanford_cars_train_no_image
+  - /prompting: tip_stanford_cars
+  - _self_
+
+data:
+  image_features_path: ${saved_paths.image_features.StanfordCars_tip_test-RN50}
+
+cache:
+  image_features_path: ${saved_paths.image_features.StanfordCars_tip_train-RN50}
+  image_outs_path: ${saved_paths.logits.StanfordCars_tip_train-RN50-tip_stanford_cars}
