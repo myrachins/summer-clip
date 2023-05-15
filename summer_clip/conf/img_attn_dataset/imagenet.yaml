@@ -1,0 +1,12 @@
+defaults:
+  - /dataset: imagenet_val_no_image
+  - /dataset@cache.dataset: imagenet_train_no_image
+  - /prompting: tip_imagenet
+  - _self_
+
+data:
+  image_features_path: ${saved_paths.image_features.ImageNet_val-RN50}
+
+cache:
+  image_features_path: ${saved_paths.image_features.ImageNet_train-RN50}
+  image_outs_path: ${saved_paths.logits.ImageNet_train-RN50-tip_adapter}
