@@ -42,7 +42,7 @@ class ImageAttention(BaseTrainer):
 
         test_text_features = eval_clip.zeroshot_classifier(
             clip_model, clip_classes, self.cfg.prompting.templates, device=device  # type: ignore
-        )
+        ).detach()
         return test_text_features.to(device)
 
     def build_cache(self, cache_strategy: CacheStrategy, image_features: torch.Tensor, image_outs: torch.Tensor) \
@@ -70,24 +70,25 @@ class ImageAttention(BaseTrainer):
         return cache_image_features, cache_image_outs, cache_info
 
     def setup_model(self):
-        self.test_text_features = self.load_test_text_features(self.device)
         self.test_image_features = torch.load(self.cfg.data.image_features_path, map_location=self.device)
+        self.clip_logits = self.compute_clip_logits(self.load_test_text_features(self.device))
 
         self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path, map_location=self.device)
         self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path, map_location=self.device)
         self.logger.log_info(f'original-data-size: {self.origin_cache_image_outs.shape[0]}')
 
-    def compute_clip_logits(self) -> torch.Tensor:
+    def compute_clip_logits(self, test_text_features) -> torch.Tensor:
         norm_test_image_features = self.test_image_features / self.test_image_features.norm(dim=0, keepdim=True)
-        clip_logits = 100. * norm_test_image_features.t() @ self.test_text_features
+        clip_logits = 100. * norm_test_image_features.t() @ test_text_features
         return clip_logits
 
     def logits_to_preds(self, logits: torch.Tensor) -> torch.Tensor:
         _, preds = logits.max(dim=1)
         return preds
 
+    @torch.no_grad()
     def train_loop(self):
-        clip_logits = self.compute_clip_logits()
+        clip_logits = self.clip_logits
         eval_top1, eval_top5 = compute_accuracy(clip_logits, self.test_labels)
         zeroshot_info: tp.Dict[str, tp.Any] = dict(acc1=eval_top1, acc5=eval_top5)
         if self.cfg.run_saves.save_preds:
