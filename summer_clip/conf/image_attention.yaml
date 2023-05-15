@@ -2,10 +2,8 @@ defaults:
   - hydra_setup
   - adapter_setup
   - saved_paths: clip_paths
+  - img_attn_dataset@dataset_cfg: eurosat
   - _self_
-  - dataset: tip_eurosat_test_no_image
-  - dataset@cache.dataset: tip_eurosat_train_no_image
-  - prompting: tip_eurosat
   - cache_value_strategy: hard_cache
   - cache_weights_strategy: tip_adapter
   # https://github.com/facebookresearch/hydra/issues/1939
@@ -18,15 +16,19 @@ defaults:
   - cache_strategy@cache_strategies.global_random: global_random
   - cache_strategy@cache_strategies.all_logits: all_logits
 
+dataset: ${dataset_cfg.dataset}
+prompting: ${dataset_cfg.prompting}
+
 clip:
   model_name: RN50
 
 data:
-  image_features_path: ${saved_paths.image_features.EuroSAT_tip_test-RN50}
+  image_features_path: ${dataset_cfg.data.image_features_path}
 
 cache:
-  image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
-  image_outs_path: ${saved_paths.logits.EuroSAT_tip_train-RN50-tip_eurosat}
+  dataset: ${dataset_cfg.cache.dataset}
+  image_features_path: ${dataset_cfg.cache.image_features_path}
+  image_outs_path: ${dataset_cfg.cache.image_outs_path}
   alpha: [0.0, 0.1, 0.5, 1., 2., 3., 4.]
   replace_outs_with_golds: false
 
