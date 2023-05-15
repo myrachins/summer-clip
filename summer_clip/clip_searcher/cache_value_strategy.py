@@ -13,7 +13,7 @@ class CacheValueStrategy(ABC):
 class HardCacheStrategy(CacheValueStrategy):
     def transform(self, cache_outs: torch.Tensor) -> torch.Tensor:
         _, labels_ids = cache_outs.max(dim=1)
-        cache_outs = F.one_hot(labels_ids, num_classes=cache_outs.shape[1]).float()
+        cache_outs = F.one_hot(labels_ids, num_classes=cache_outs.shape[1]).half()
         return cache_outs
 
 

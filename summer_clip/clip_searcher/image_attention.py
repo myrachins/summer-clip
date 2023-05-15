@@ -63,18 +63,18 @@ class ImageAttention(BaseTrainer):
             eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
             cache_info.update(dict(acc1=eval_top1, acc5=eval_top5))
             if self.cfg.cache.get('replace_outs_with_golds', False):
-                cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).float()
+                cache_image_outs = F.one_hot(cache_labels.long(), num_classes=cache_image_outs.shape[1]).half()
                 eval_top1, eval_top5 = compute_accuracy(cache_image_outs, cache_labels)
                 cache_info.update(dict(acc1_replace=eval_top1, acc5_replace=eval_top5))
 
         return cache_image_features, cache_image_outs, cache_info
 
     def setup_model(self):
-        self.test_text_features = self.load_test_text_features(self.device).float()
-        self.test_image_features = torch.load(self.cfg.data.image_features_path, map_location=self.device).float()
+        self.test_text_features = self.load_test_text_features(self.device)
+        self.test_image_features = torch.load(self.cfg.data.image_features_path, map_location=self.device)
 
-        self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path, map_location=self.device).float()
-        self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path, map_location=self.device).float()
+        self.origin_cache_image_features = torch.load(self.cfg.cache.image_features_path, map_location=self.device)
+        self.origin_cache_image_outs = torch.load(self.cfg.cache.image_outs_path, map_location=self.device)
         self.logger.log_info(f'original-data-size: {self.origin_cache_image_outs.shape[0]}')
 
     def compute_clip_logits(self) -> torch.Tensor:
