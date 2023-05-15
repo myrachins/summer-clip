@@ -10,7 +10,9 @@ defaults:
   - cache_weights_strategy: tip_adapter
   # https://github.com/facebookresearch/hydra/issues/1939
   - cache_strategy@cache_strategies.topk: topk
+  - cache_strategy@cache_strategies.topk_prob: topk_prob
   - cache_strategy@cache_strategies.topk_per_gold: topk_per_gold
+  - cache_strategy@cache_strategies.topk_prob_per_gold: topk_prob_per_gold
   - cache_strategy@cache_strategies.per_pred_class_random: per_pred_class_random
   - cache_strategy@cache_strategies.per_gold_class_random: per_gold_class_random
   - cache_strategy@cache_strategies.global_random: global_random

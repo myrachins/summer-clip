@@ -70,6 +70,17 @@ class TopKStrategy(IndexedCacheStrategy):
         return select_topk_per_label(label_preds, image_logits, self.topk)
 
 
+class TopKProbStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int, scale: float) -> None:
+        super().__init__()
+        self.scale = scale
+        self.topk_strategy = TopKStrategy(topk)
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        image_outs = torch.softmax(image_outs * self.scale, dim=1)
+        return self.topk_strategy.select(image_features, image_outs)
+
+
 class TopKPerGoldStrategy(IndexedCacheStrategy):
     def __init__(self, topk: int, cache_dataset: Dataset) -> None:
         super().__init__()
@@ -81,6 +92,17 @@ class TopKPerGoldStrategy(IndexedCacheStrategy):
         labels_indexes = cache_labels.long().unsqueeze(dim=0).t()
         image_logits = image_outs.gather(1, labels_indexes).squeeze(dim=1)
         return select_topk_per_label(cache_labels, image_logits, self.topk)
+
+
+class TopKPerGoldProbStrategy(IndexedCacheStrategy):
+    def __init__(self, topk: int, cache_dataset: Dataset, scale: float) -> None:
+        super().__init__()
+        self.scale = scale
+        self.topk_strategy = TopKPerGoldStrategy(topk, cache_dataset)
+
+    def select(self, image_features: torch.Tensor, image_outs: torch.Tensor) -> torch.Tensor:
+        image_outs = torch.softmax(image_outs * self.scale, dim=1)
+        return self.topk_strategy.select(image_features, image_outs)
 
 
 class GlobalRandomSampleStrategy(IndexedCacheStrategy):
