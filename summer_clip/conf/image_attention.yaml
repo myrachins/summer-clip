@@ -3,6 +3,8 @@ defaults:
   - adapter_setup
   - saved_paths: clip_paths
   - img_attn_dataset@dataset_cfg: stanford_cars
+  - dataset: tip_dataset_test_no_image
+  - dataset@cache.dataset: tip_dataset_train_no_image
   - _self_
   - cache_value_strategy: hard_cache
   - cache_weights_strategy: tip_adapter
@@ -16,7 +18,7 @@ defaults:
   - cache_strategy@cache_strategies.global_random: global_random
   - cache_strategy@cache_strategies.all_logits: all_logits
 
-dataset: ${dataset_cfg.dataset}
+dataset_name: ${dataset_cfg.dataset_name}
 prompting: ${dataset_cfg.prompting}
 
 clip:
@@ -26,7 +28,6 @@ data:
   image_features_path: ${dataset_cfg.data.image_features_path}
 
 cache:
-  dataset: ${dataset_cfg.cache.dataset}
   image_features_path: ${dataset_cfg.cache.image_features_path}
   image_outs_path: ${dataset_cfg.cache.image_outs_path}
   alpha: [0.0, 0.1, 0.5, 1., 2., 3., 4.]

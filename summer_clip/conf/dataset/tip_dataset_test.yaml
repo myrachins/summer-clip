@@ -1,0 +1,7 @@
+_target_: summer_clip.utils.datasets.TipAdapterDataset
+dataset: ${dataset_name}
+split: test
+root_path: ${path.cache_dir}
+shots: -1
+is_train: false
+use_custom_preprocess: false
