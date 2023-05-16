@@ -1,0 +1,11 @@
+defaults:
+  - /prompting: tip_ucf101
+
+dataset_name: ucf101
+
+data:
+  image_features_path: ${saved_paths.image_features.UCF101_tip_test-RN50}
+
+cache:
+  image_features_path: ${saved_paths.image_features.UCF101_tip_train-RN50}
+  image_outs_path: ${saved_paths.logits.UCF101_tip_train-RN50-tip}
