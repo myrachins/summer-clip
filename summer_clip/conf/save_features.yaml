@@ -4,9 +4,9 @@ defaults:
   - _self_
   - dataset@train_dataset: tip_dataset_train
   - dataset@test_dataset: tip_dataset_test
-  - prompting: tip_oxford_flowers
+  - prompting: tip_food101
 
-dataset_name: oxford_flowers
+dataset_name: food101
 save_train_outs: true
 
 clip:
