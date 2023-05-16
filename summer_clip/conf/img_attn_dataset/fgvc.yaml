@@ -1,0 +1,11 @@
+defaults:
+  - /prompting: tip_fgvc
+
+dataset_name: fgvc
+
+data:
+  image_features_path: ${saved_paths.image_features.FGVCAircraft_tip_test-RN50}
+
+cache:
+  image_features_path: ${saved_paths.image_features.FGVCAircraft_tip_train-RN50}
+  image_outs_path: ${saved_paths.logits.FGVCAircraft_tip_train-RN50-tip}

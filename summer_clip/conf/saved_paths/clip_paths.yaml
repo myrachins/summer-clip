@@ -39,6 +39,12 @@ image_features:
   Food101_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-27-53/train_image_features.pt
   Food101_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-27-53/test_image_features.pt
 
+  FGVCAircraft_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-07-46/train_image_features.pt
+  FGVCAircraft_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-07-46/test_image_features.pt
+
+  DescribableTextures_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-36-48/train_image_features.pt
+  DescribableTextures_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-36-48/test_image_features.pt
+
 adapters:
   linear:
     CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09
@@ -60,3 +66,5 @@ logits:
   OxfordPets_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/05-27-54/train_image_outs.pt
   OxfordFlowers_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-00-47/train_image_outs.pt
   Food101_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-27-53/train_image_outs.pt
+  FGVCAircraft_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-07-46/train_image_outs.pt
+  DescribableTextures_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-36-48/train_image_outs.pt
