@@ -42,7 +42,7 @@ class ThresholdStrategy(IndexedCacheStrategy):
         image_outs_transformed = F.softmax(image_outs, dim=1) if self.use_softmax else image_outs
         max_probs, _ = image_outs_transformed.max(dim=1)
         confidence_mask = (max_probs >= self.threshold)
-        return confidence_mask.nonzero().squeeze()
+        return confidence_mask.nonzero().squeeze(1)
 
 
 def select_topk_per_label(image_labels: torch.Tensor, image_logits: torch.Tensor, topk: int) -> torch.Tensor:
@@ -121,7 +121,7 @@ def select_k_random_per_label(image_labels: torch.Tensor, k: int) -> torch.Tenso
     samples_ids = []
 
     for label in image_labels.unique():
-        label_inds = (image_labels == label).nonzero().squeeze()
+        label_inds = (image_labels == label).nonzero().squeeze(1)
         label_k = min(k, label_inds.shape[0])
         label_samples_inds_np = np.random.choice(label_inds.shape[0], size=label_k, replace=False)
         label_samples_inds = torch.LongTensor(label_samples_inds_np).to(label_inds.device)

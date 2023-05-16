@@ -30,6 +30,12 @@ image_features:
   Caltech101_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-07-50/image_features.pt
   Caltech101_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-13-17/image_features.pt
 
+  OxfordPets_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/05-27-54/train_image_features.pt
+  OxfordPets_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/05-27-54/test_image_features.pt
+
+  OxfordFlowers_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-00-47/train_image_features.pt
+  OxfordFlowers_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-00-47/test_image_features.pt
+
 adapters:
   linear:
     CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09
@@ -48,3 +54,5 @@ logits:
   StanfordCars_tip_train-RN50-tip_stanford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-09/10-38-05/image_outs.pt
   EuroSAT_tip_train-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-10-25/17-35-00/image_outs.pt
   Caltech101_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-20-49/image_outs.pt
+  OxfordPets_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/05-27-54/train_image_outs.pt
+  OxfordFlowers_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/07-00-47/train_image_outs.pt

@@ -2,7 +2,7 @@ defaults:
   - hydra_setup
   - adapter_setup
   - saved_paths: clip_paths
-  - img_attn_dataset@dataset_cfg: caltech101
+  - img_attn_dataset@dataset_cfg: oxford_flowers
   - dataset: tip_dataset_test_no_image
   - dataset@cache.dataset: tip_dataset_train_no_image
   - _self_
