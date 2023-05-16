@@ -2,9 +2,12 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: tip_dataset_test
+  - dataset@train_dataset: tip_dataset_train
+  - dataset@test_dataset: tip_dataset_test
+  - prompting: tip_oxford_pets
 
-dataset_name: caltech101
+dataset_name: oxford_pets
+save_train_outs: true
 
 clip:
   model_name: RN50
@@ -12,4 +15,3 @@ clip:
 data:
   batch_size: 512
   num_workers: 2
-  output_path: image_features.pt
