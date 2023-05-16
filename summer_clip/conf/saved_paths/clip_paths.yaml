@@ -27,6 +27,9 @@ image_features:
   EuroSAT_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-10-25/16-48-07/image_features.pt
   EuroSAT_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-10-25/16-57-16/image_features.pt
 
+  Caltech101_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-07-50/image_features.pt
+  Caltech101_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-13-17/image_features.pt
+
 adapters:
   linear:
     CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09
@@ -44,3 +47,4 @@ logits:
   StanfordCars_train-RN50-tip_stanford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-05/19-53-58/image_outs.pt
   StanfordCars_tip_train-RN50-tip_stanford_cars: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-09-09/10-38-05/image_outs.pt
   EuroSAT_tip_train-RN50-tip_eurosat: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-10-25/17-35-00/image_outs.pt
+  Caltech101_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/03-20-49/image_outs.pt

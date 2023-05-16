@@ -1,16 +1,18 @@
 defaults:
   - hydra_setup
   - adapter_setup
-  - saved_paths
+  - saved_paths: clip_paths
   - _self_
-  - dataset: tip_eurosat_train_no_image
-  - prompting: tip_eurosat
+  - dataset: tip_dataset_train_no_image
+  - prompting: tip_caltech101
+
+dataset_name: caltech101
 
 clip:
   model_name: RN50
 
 data:
-  image_features_path: ${saved_paths.image_features.EuroSAT_tip_train-RN50}
+  image_features_path: ${saved_paths.image_features.Caltech101_tip_train-RN50}
   output_image_outs: image_outs.pt
 
 exp:
