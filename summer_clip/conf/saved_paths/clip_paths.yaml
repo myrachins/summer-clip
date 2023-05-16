@@ -48,6 +48,9 @@ image_features:
   UCF101_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-56-52/train_image_features.pt
   UCF101_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-56-52/test_image_features.pt
 
+  SUN397_tip_train-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/18-06-04/train_image_features.pt
+  SUN397_tip_test-RN50: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/18-06-04/test_image_features.pt
+
 adapters:
   linear:
     CIFAR100_train-ViT_B/16: /home/myurachinskiy/CLIP/summer-clip/outputs/2022-07-25/10-05-09
@@ -72,3 +75,4 @@ logits:
   FGVCAircraft_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-07-46/train_image_outs.pt
   DescribableTextures_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-36-48/train_image_outs.pt
   UCF101_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/08-56-52/train_image_outs.pt
+  SUN397_tip_train-RN50-tip: /home/myurachinskiy/CLIP/summer-clip/outputs/2023-05-16/18-06-04/train_image_outs.pt

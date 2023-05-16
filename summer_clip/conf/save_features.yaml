@@ -4,9 +4,9 @@ defaults:
   - _self_
   - dataset@train_dataset: tip_dataset_train
   - dataset@test_dataset: tip_dataset_test
-  - prompting: tip_ucf101
+  - prompting: tip_sun397
 
-dataset_name: ucf101
+dataset_name: sun397
 save_train_outs: true
 
 clip:
