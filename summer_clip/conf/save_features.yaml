@@ -2,7 +2,9 @@ defaults:
   - hydra_setup
   - adapter_setup
   - _self_
-  - dataset: tip_eurosat_test
+  - dataset: tip_dataset_test
+
+dataset_name: caltech101
 
 clip:
   model_name: RN50

@@ -1,4 +1,5 @@
 import logging
+import typing as tp
 
 import torch
 import clip
@@ -37,9 +38,10 @@ def calculate_image_features(model, loader, device):
 
 
 def save_features(model_name: str, dataset_cfg: DictConfig, output_path: str, batch_size: int, num_workers: int,
-                  device: str, random_state: int) -> None:
+                  device: tp.Optional[str], random_state: int) -> None:
     eval_clip.set_random_state(random_state)
 
+    device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
     clip_model, preprocess = clip.load(model_name, device, jit=False)
     dataset = hydra.utils.instantiate(dataset_cfg, transform=preprocess)
     indexed_dataset = IndexedDataset(dataset)
