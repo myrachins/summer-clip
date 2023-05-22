@@ -18,10 +18,11 @@ class HardCacheStrategy(CacheValueStrategy):
 
 
 class SoftmaxCacheStrategy(CacheValueStrategy):
-    def __init__(self, scale: float) -> None:
+    def __init__(self, clip_scale: float, scale: float) -> None:
         super().__init__()
+        self.clip_scale = clip_scale
         self.scale = scale
 
     def transform(self, cache_outs: torch.Tensor) -> torch.Tensor:
-        cache_outs = F.softmax(self.scale * cache_outs, dim=1)
+        cache_outs = F.softmax(self.clip_scale * self.scale * cache_outs, dim=1)
         return cache_outs
