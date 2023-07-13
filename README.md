@@ -4,6 +4,8 @@ This repository contains the experiments conducted during my Master's thesis at 
 
 ## CLIP-search
 
+CLIP-search is a novel method for image classification that does not require model retraining or labeled data. By incorporating image attention mechanisms and pseudo-labeling strategies, CLIP-search overcomes limitations of existing methods such as UPL and Tip-Adapter, and offers an efficient solution for online classification scenarios where gathering new labeled data or retraining is expensive or impractical.
+
 To reproduce the results of the CLIP-search method, please follow the steps below. Although the instructions are provided for the SUN397 dataset, they are generally applicable to any other dataset unless stated otherwise.
 
 ### Step 1: Set up the environment
